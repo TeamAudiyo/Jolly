@@ -1,6 +1,6 @@
 # Web Viewer
 
-![Jolly 0.4.0 web viewer changing scenes, camera views, and robot pose](../assets/jolly-web-demo.gif)
+![Jolly 0.4.0 web viewer executing a Cartesian reach in the insertion scene](../assets/jolly-web-demo.gif)
 
 [Watch the full WebM recording](../assets/jolly-web-demo.webm) or
 [open the full-resolution still](../assets/jolly-so101-viewer.png).
@@ -24,8 +24,8 @@ The viewer provides:
 - Scene objects.
 - A safe local command console for state, reset, move, and reach.
 
-The recording switches camera views and executes a Cartesian reach in the
-insertion scene through the local command console.
+The recording executes a Cartesian reach in the insertion scene through the
+local command console.
 
 The API writes the same persistent state as the CLI. The default bind is
 loopback-only. Do not use `--unsafe-public` on an untrusted network.

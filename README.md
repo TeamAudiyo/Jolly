@@ -23,14 +23,14 @@ API key, or network connection is required at runtime.
 
 ### Interactive SO-101 simulator
 
-![Jolly 0.4.0 web viewer changing scenes, camera views, and robot pose](docs/assets/jolly-web-demo.gif)
+![Jolly 0.4.0 web viewer executing a Cartesian reach in the insertion scene](docs/assets/jolly-web-demo.gif)
 
 [Watch the full WebM recording](docs/assets/jolly-web-demo.webm) ·
 [Open the full-resolution still](docs/assets/jolly-so101-viewer.png)
 
 The recording uses the official SO-101 CAD meshes in a real PyBullet world. It
-switches camera views and executes a Cartesian reach in the insertion scene.
-The viewport is not a diagram or a hand-drawn robot substitute.
+executes a Cartesian reach in the insertion scene. The viewport is not a
+diagram or a hand-drawn robot substitute.
 
 ### Randomized terminal benchmark and hardware commands
 
