@@ -174,6 +174,15 @@ class PhysicsEngine:
     def reset(self) -> dict[str, object]:
         self.held_object = None
         self.gripper = 0.0
+        for name, body in self.object_ids.items():
+            spec = self.object_specs[name]
+            p.resetBasePositionAndOrientation(
+                body,
+                spec["position"],
+                [0, 0, 0, 1],
+                physicsClientId=self.client,
+            )
+            p.resetBaseVelocity(body, [0, 0, 0], [0, 0, 0], physicsClientId=self.client)
         for info, degrees in zip(self.arm_joints, self.model.home_degrees, strict=True):
             p.resetJointState(self.robot_id, info.index, math.radians(degrees), physicsClientId=self.client)
         self._set_gripper_state(0.0)
@@ -339,6 +348,16 @@ class PhysicsEngine:
 
     def _update_grasp(self) -> None:
         if self.gripper <= 0.25:
+            if self.held_object and self.held_object in self.object_ids:
+                body = self.object_ids[self.held_object]
+                position, orientation = p.getBasePositionAndOrientation(body, physicsClientId=self.client)
+                released_position = [position[0], position[1], max(0.02, position[2] - 0.025)]
+                p.resetBasePositionAndOrientation(
+                    body,
+                    released_position,
+                    orientation,
+                    physicsClientId=self.client,
+                )
             self.held_object = None
             return
         if self.gripper < 0.75 or self.held_object is not None:

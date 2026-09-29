@@ -39,6 +39,20 @@ def test_cli_move_persists_state(tmp_path, monkeypatch) -> None:
     assert current["joints"][1]["position_degrees"] == pytest.approx(-20, abs=0.5)
 
 
+def test_reset_restores_objects_in_same_scene(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("JOLLY_STATE_DIR", str(tmp_path))
+    runner = CliRunner()
+    initial = json.loads(invoke(runner, ["reset", "--scene", "blocks", "--json"]).output)
+    red = next(item for item in initial["objects"] if item["name"] == "red_block")
+    state_path = tmp_path / "state.json"
+    saved = json.loads(state_path.read_text(encoding="utf-8"))
+    next(item for item in saved["objects"] if item["name"] == "red_block")["position"] = [0.16, -0.27, 0.05]
+    state_path.write_text(json.dumps(saved), encoding="utf-8")
+    reset = json.loads(invoke(runner, ["reset", "--scene", "blocks", "--json"]).output)
+    reset_red = next(item for item in reset["objects"] if item["name"] == "red_block")
+    assert reset_red["position"] == pytest.approx(red["position"], abs=1e-4)
+
+
 def test_cli_lists_scenes_and_challenges(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("JOLLY_STATE_DIR", str(tmp_path))
     runner = CliRunner()

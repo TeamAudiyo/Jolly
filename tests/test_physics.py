@@ -46,6 +46,9 @@ def test_grasp_helper_tracks_nearby_object() -> None:
         state = engine.reach(0.30, -0.16, 0.10, gripper=1.0)
         assert state["held_object"] == "red_block"
         assert state["collisions"]["collision"] is False
+        released = engine.reach(0.30, -0.16, 0.15, gripper=0.0)
+        assert released["held_object"] is None
+        assert released["collisions"]["collision"] is False
 
 
 def test_carried_object_floor_collision_rolls_back() -> None:

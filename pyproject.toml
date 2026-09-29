@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "jolly-cli"
-version = "0.1.0"
+version = "0.1.1"
 description = "Local, CLI-native robot-arm physics simulation for humans and LLM agents"
 readme = "README.md"
 requires-python = ">=3.10"
