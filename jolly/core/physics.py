@@ -81,6 +81,7 @@ class JollyEngine:
         self.object_ids: dict[str, int] = {}
         self.object_specs: dict[str, dict[str, object]] = {}
         self.held_object: str | None = None
+        self.grasp_constraint_id: int | None = None
         self.gripper = 0.0
         try:
             self._load_world()
@@ -215,6 +216,7 @@ class JollyEngine:
             p.changeDynamics(body, -1, lateralFriction=0.8, restitution=0.05, physicsClientId=self.client)
 
     def reset(self) -> dict[str, object]:
+        self._remove_grasp_constraint()
         self.held_object = None
         self.gripper = 0.0
         for name, body in self.object_ids.items():
@@ -274,7 +276,8 @@ class JollyEngine:
                 )
         held = state.get("held_object")
         self.held_object = str(held) if held in self.object_ids else None
-        self._sync_held_object()
+        if self.held_object:
+            self._attach_grasp_constraint(self.held_object)
         self._hold_current_pose()
         p.performCollisionDetection(physicsClientId=self.client)
 
@@ -326,8 +329,10 @@ class JollyEngine:
             raise MotionError("Motion stopped because the robot collided. Use --allow-collision only for controlled tests.")
         if gripper is not None:
             self._set_gripper_state(float(gripper))
+            self._hold_current_pose()
             self._update_grasp()
-        self._hold_current_pose()
+        else:
+            self._hold_current_pose()
         self._step(8)
         self._clamp_arm_to_limits()
         final_collisions = self.collisions()
@@ -335,8 +340,11 @@ class JollyEngine:
             for info, value in zip(self.arm_joints, start, strict=True):
                 p.resetJointState(self.robot_id, info.index, value, physicsClientId=self.client)
             self._set_gripper_state(old_gripper)
+            self._remove_grasp_constraint()
             self.held_object = old_held_object
             self._restore_object_poses(old_objects)
+            if self.held_object:
+                self._attach_grasp_constraint(self.held_object)
             self._hold_current_pose()
             raise MotionError("Motion rolled back because settling created a collision.")
         return self.state()
@@ -411,17 +419,11 @@ class JollyEngine:
 
     def _update_grasp(self) -> None:
         if self.gripper <= 0.25:
-            if self.held_object and self.held_object in self.object_ids:
-                body = self.object_ids[self.held_object]
-                position, orientation = p.getBasePositionAndOrientation(body, physicsClientId=self.client)
-                released_position = [position[0], position[1], max(0.02, position[2] - 0.025)]
-                p.resetBasePositionAndOrientation(
-                    body,
-                    released_position,
-                    orientation,
-                    physicsClientId=self.client,
-                )
+            released = self.held_object is not None
+            self._remove_grasp_constraint()
             self.held_object = None
+            if released:
+                self._step(120)
             return
         if self.gripper < 0.75 or self.held_object is not None:
             return
@@ -436,20 +438,53 @@ class JollyEngine:
             distance, name = min(candidates)
             if distance <= 0.10:
                 self.held_object = name
-                self._sync_held_object()
+                self._attach_grasp_constraint(name)
 
     def _sync_held_object(self) -> None:
-        if self.held_object is None or self.held_object not in self.object_ids:
+        """Constraints advance held objects during simulation; no pose teleport is used."""
+
+    def _remove_grasp_constraint(self) -> None:
+        if self.grasp_constraint_id is None:
             return
-        position = self.end_effector_position()
-        held_position = [position[0], position[1], max(0.02, position[2] - 0.045)]
-        p.resetBasePositionAndOrientation(
-            self.object_ids[self.held_object], held_position, [0, 0, 0, 1], physicsClientId=self.client
+        try:
+            p.removeConstraint(self.grasp_constraint_id, physicsClientId=self.client)
+        except p.error:
+            pass
+        self.grasp_constraint_id = None
+
+    def _attach_grasp_constraint(self, name: str) -> None:
+        self._remove_grasp_constraint()
+        link = p.getLinkState(
+            self.robot_id,
+            self.end_effector_index,
+            computeForwardKinematics=True,
+            physicsClientId=self.client,
         )
+        parent_position, parent_orientation = link[4], link[5]
+        child_position, child_orientation = p.getBasePositionAndOrientation(
+            self.object_ids[name], physicsClientId=self.client
+        )
+        inverse_position, inverse_orientation = p.invertTransform(parent_position, parent_orientation)
+        relative_position, relative_orientation = p.multiplyTransforms(
+            inverse_position, inverse_orientation, child_position, child_orientation
+        )
+        self.grasp_constraint_id = p.createConstraint(
+            parentBodyUniqueId=self.robot_id,
+            parentLinkIndex=self.end_effector_index,
+            childBodyUniqueId=self.object_ids[name],
+            childLinkIndex=-1,
+            jointType=p.JOINT_FIXED,
+            jointAxis=[0, 0, 0],
+            parentFramePosition=relative_position,
+            childFramePosition=[0, 0, 0],
+            parentFrameOrientation=relative_orientation,
+            childFrameOrientation=[0, 0, 0, 1],
+            physicsClientId=self.client,
+        )
+        p.changeConstraint(self.grasp_constraint_id, maxForce=80.0, physicsClientId=self.client)
 
     def _step(self, count: int) -> None:
         for _ in range(count):
-            self._sync_held_object()
             p.stepSimulation(physicsClientId=self.client)
             if self.realtime:
                 time.sleep(self.timestep)
@@ -518,6 +553,12 @@ class JollyEngine:
                 body_b = int(contact[2])
                 if body_b in (self.robot_id, held_body):
                     continue
+                if body_b == self.plane_id:
+                    position, _ = p.getBasePositionAndOrientation(held_body, physicsClientId=self.client)
+                    size = self.object_specs[self.held_object].get("size", [0.0, 0.0, 0.0])
+                    supported = position[2] >= float(size[2]) / 2.0 - 0.003
+                    if supported and self.end_effector_position()[2] >= 0.08:
+                        continue
                 details.append(
                     {
                         "type": "held_object_environment",

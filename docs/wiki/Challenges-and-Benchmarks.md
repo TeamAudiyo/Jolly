@@ -20,10 +20,13 @@ jolly challenge status --json
 The start result contains a generated seed and instance. Use `--seed` to replay
 the exact case.
 
-`jolly benchmark --json` checks engine health with randomized joint states and
-scene layouts. Use `--cases` to select cases per model and scene. Use `--seed`
-to replay the exact generated inputs.
+`jolly benchmark --json` executes randomized reaching, obstacle avoidance, and
+drop-in-hole tasks. The score uses measured reach error, collision state, grasp
+state, release state, and the peg's final physical pose. Scene construction and
+forward-kinematics health checks contribute no points.
 
-Jolly uses its own `JollyEngine` and `JollyDriver`. It does not use Inspect,
-Inspect AI, or an external robot benchmark harness. PyBullet remains the local
-open-source rigid-body physics backend.
+Jolly uses its own `JollyEngine`, `JollyDriver`, and direct
+`SO101HardwareDriver`. It does not use Inspect, Inspect AI, or an external robot
+benchmark harness. PyBullet remains the local open-source rigid-body backend
+for physics tasks. Physical SO-101 results come only from STS3215 motor feedback
+and remain separate from physics scores.

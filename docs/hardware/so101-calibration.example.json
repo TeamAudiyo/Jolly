@@ -1,0 +1,10 @@
+{
+  "motors": {
+    "shoulder_pan": {"id": 1, "zero_raw": 2048, "direction": 1, "raw_per_degree": 11.3777777778},
+    "shoulder_lift": {"id": 2, "zero_raw": 2048, "direction": 1, "raw_per_degree": 11.3777777778},
+    "elbow_flex": {"id": 3, "zero_raw": 2048, "direction": 1, "raw_per_degree": 11.3777777778},
+    "wrist_flex": {"id": 4, "zero_raw": 2048, "direction": 1, "raw_per_degree": 11.3777777778},
+    "wrist_roll": {"id": 5, "zero_raw": 2048, "direction": 1, "raw_per_degree": 11.3777777778},
+    "gripper": {"id": 6, "open_raw": 2048, "closed_raw": 3072}
+  }
+}

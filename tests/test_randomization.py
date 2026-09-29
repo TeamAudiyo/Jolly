@@ -48,15 +48,16 @@ def test_benchmark_randomizes_every_case_and_replays_seed() -> None:
     first = run_benchmark(seed=77, cases=1)
     replay = run_benchmark(seed=77, cases=1)
     different = run_benchmark(seed=78, cases=1)
-    first_inputs = [check["input"] for check in first["checks"]]
-    replay_inputs = [check["input"] for check in replay["checks"]]
-    different_inputs = [check["input"] for check in different["checks"]]
-    assert first["ok"] is True
+    first_inputs = [task["instance"] for task in first["tasks"]]
+    replay_inputs = [task["instance"] for task in replay["tasks"]]
+    different_inputs = [task["instance"] for task in different["tasks"]]
     assert first["engine"] == JollyEngine.name
     assert first["driver"] == JollyDriver.name
     assert first_inputs == replay_inputs
     assert first_inputs != different_inputs
     assert len({item["seed"] for item in first_inputs}) == len(first_inputs)
+    assert first["score"] == replay["score"]
+    assert all("metrics" in task and "score" in task for task in first["tasks"])
 
 
 def test_jolly_engine_declares_its_backend_without_external_harness() -> None:

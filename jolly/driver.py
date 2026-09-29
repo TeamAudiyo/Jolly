@@ -65,6 +65,20 @@ class JollyDriver:
             objects["barrier_left"] = self._point(barrier_x, -gap, 0.11)
             objects["barrier_right"] = self._point(barrier_x, gap, 0.11)
             instance["target"] = goal
+        elif challenge_id == "drop-in-hole":
+            objects = instance["object_positions"]
+            peg = self._point(rng.uniform(0.27, 0.33), rng.uniform(-0.18, -0.10), 0.05)
+            center = self._point(rng.uniform(0.25, 0.30), rng.uniform(0.13, 0.19), 0.012)
+            objects["peg"] = peg
+            objects["hole_bottom"] = center
+            objects["hole_left"] = self._point(center[0], center[1] - 0.055, 0.07)
+            objects["hole_right"] = self._point(center[0], center[1] + 0.055, 0.07)
+            objects["hole_front"] = self._point(center[0] - 0.055, center[1], 0.07)
+            objects["hole_back"] = self._point(center[0] + 0.055, center[1], 0.07)
+            instance["object_name"] = "peg"
+            instance["target"] = center
+            instance["hole_radius"] = 0.023
+            instance["rim_height"] = 0.13
         else:
             raise ConfigurationError(f"Unknown challenge '{challenge_id}'.")
         return instance

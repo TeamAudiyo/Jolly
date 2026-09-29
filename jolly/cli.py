@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any
 
 import click
@@ -15,6 +17,7 @@ from jolly.benchmark import run_benchmark
 from jolly.challenges import evaluate, get_challenge, list_challenges
 from jolly.driver import JollyDriver
 from jolly.engine import JollyEngine
+from jolly.hardware import SO101Calibration, SO101HardwareDriver, calibration_example
 from jolly.core.errors import ConfigurationError, JollyError
 from jolly.core.models import get_model, list_models
 from jolly.core.scenes import get_scene, list_scenes
@@ -292,11 +295,95 @@ def challenge_status_command(challenge_id: str | None, json_output: bool) -> Non
 @main.command("benchmark")
 @click.option("seed", "--seed", type=click.IntRange(0, 2**63 - 1))
 @click.option("cases", "--cases", type=click.IntRange(1, 25), default=3, show_default=True)
+@click.option("model", "--model", type=click.Choice(["so101", "jolly6"]), default="so101", show_default=True)
 @click.option("json_output", "--json", is_flag=True)
-def benchmark_command(seed: int | None, cases: int, json_output: bool) -> None:
-    """Run Jolly's seeded randomized engine benchmark."""
-    data = run_benchmark(seed=seed, cases=cases)
-    emit(data, json_output=json_output, message=f"Benchmark score: {data['score']:.1f}/100 ({data['passed']}/{data['total']} checks)")
+def benchmark_command(seed: int | None, cases: int, model: str, json_output: bool) -> None:
+    """Execute randomized motion and contact tasks in the physical world."""
+    data = run_benchmark(seed=seed, cases=cases, model=model)
+    emit(data, json_output=json_output, message=f"Physical task score: {data['score']:.1f}/100 ({data['passed']}/{data['total']} tasks)")
+
+
+@main.group("hardware")
+def hardware_group() -> None:
+    """Control a physical SO-101 through its STS3215 serial bus."""
+
+
+def _hardware(port: str, calibration_path: str) -> SO101HardwareDriver:
+    return SO101HardwareDriver(port, SO101Calibration.load(calibration_path))
+
+
+@hardware_group.command("calibration-example")
+@click.option("output", "--output", required=True, type=click.Path(dir_okay=False))
+def hardware_calibration_example_command(output: str) -> None:
+    """Write a physical-arm calibration template without enabling hardware."""
+    Path(output).write_text(json.dumps(calibration_example(), indent=2) + "\n", encoding="utf-8")
+    click.echo(f"Wrote placeholder calibration template to {output}. Measure the physical arm before use.")
+
+
+@hardware_group.command("scan")
+@click.option("port", "--port", required=True, help="Serial device, for example /dev/ttyACM0.")
+@click.option("calibration_path", "--calibration", required=True, type=click.Path(exists=True, dir_okay=False))
+@click.option("json_output", "--json", is_flag=True)
+def hardware_scan_command(port: str, calibration_path: str, json_output: bool) -> None:
+    """Ping the six configured physical motors."""
+    with _hardware(port, calibration_path) as hardware:
+        found = hardware.scan()
+    emit({"ok": len(found) == 6, "driver": SO101HardwareDriver.name, "port": port, "motor_ids": found}, json_output=json_output, message=f"Found physical motor IDs: {found}")
+
+
+@hardware_group.command("state")
+@click.option("port", "--port", required=True)
+@click.option("calibration_path", "--calibration", required=True, type=click.Path(exists=True, dir_okay=False))
+@click.option("json_output", "--json", is_flag=True)
+def hardware_state_command(port: str, calibration_path: str, json_output: bool) -> None:
+    """Read measured positions from a physical SO-101."""
+    with _hardware(port, calibration_path) as hardware:
+        data = hardware.state()
+    emit(data, json_output=json_output, message="Read physical SO-101 state.")
+
+
+@hardware_group.command("move")
+@click.option("port", "--port", required=True)
+@click.option("calibration_path", "--calibration", required=True, type=click.Path(exists=True, dir_okay=False))
+@click.option("joints", "--joints", required=True, callback=parse_joints)
+@click.option("gripper", "--gripper", required=True, type=click.FloatRange(0.0, 1.0))
+@click.option("confirm_hardware", "--confirm-hardware", is_flag=True, help="Confirm that the physical workspace is clear.")
+@click.option("json_output", "--json", is_flag=True)
+def hardware_move_command(port: str, calibration_path: str, joints: list[float], gripper: float, confirm_hardware: bool, json_output: bool) -> None:
+    """Move a physical SO-101 with feedback and a 20-degree step limit."""
+    if not confirm_hardware:
+        raise ConfigurationError("Physical movement requires --confirm-hardware after clearing the workspace.")
+    with _hardware(port, calibration_path) as hardware:
+        data = hardware.move(joints, gripper)
+        hardware.set_torque(False)
+    emit(data, json_output=json_output, message=f"Physical move completed with {data['max_error_degrees']:.2f}° maximum error.")
+
+
+@hardware_group.command("benchmark")
+@click.option("port", "--port", required=True)
+@click.option("calibration_path", "--calibration", required=True, type=click.Path(exists=True, dir_okay=False))
+@click.option("seed", "--seed", type=click.IntRange(0, 2**63 - 1))
+@click.option("cases", "--cases", type=click.IntRange(1, 10), default=3, show_default=True)
+@click.option("confirm_hardware", "--confirm-hardware", is_flag=True, help="Confirm a clear physical workspace and bounded motion.")
+@click.option("json_output", "--json", is_flag=True)
+def hardware_benchmark_command(port: str, calibration_path: str, seed: int | None, cases: int, confirm_hardware: bool, json_output: bool) -> None:
+    """Execute bounded random motion on a physical SO-101 and score feedback."""
+    if not confirm_hardware:
+        raise ConfigurationError("Physical benchmarking requires --confirm-hardware after clearing the workspace.")
+    selected_seed = seed if seed is not None else secrets.randbits(63)
+    with _hardware(port, calibration_path) as hardware:
+        data = hardware.benchmark(seed=selected_seed, cases=cases)
+    emit(data, json_output=json_output, message=f"Physical hardware score: {data['score']:.1f}/100.")
+
+
+@hardware_group.command("stop")
+@click.option("port", "--port", required=True)
+@click.option("calibration_path", "--calibration", required=True, type=click.Path(exists=True, dir_okay=False))
+def hardware_stop_command(port: str, calibration_path: str) -> None:
+    """Disable torque on every configured physical motor."""
+    with _hardware(port, calibration_path) as hardware:
+        hardware.emergency_stop()
+    click.echo("Physical SO-101 torque disabled.")
 
 
 @main.command("viewer")

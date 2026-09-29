@@ -89,9 +89,10 @@ jolly benchmark --cases 5 --json
 Read the generated `seed` and `instance` before planning. Never assume fixed
 coordinates from an earlier run. Pass `--seed N` only to replay a case.
 
-Jolly's randomized engine benchmark checks simulator health. A challenge
-evaluates agent task performance. Do not confuse the engine score with a
-manipulation score.
+Jolly's physics benchmark executes reach, obstacle, and drop-in-hole tasks. Read
+each task's measured outcome. Do not treat scene loading or FK health as task
+performance. Physical hardware uses the separate `jolly hardware benchmark`
+command and never shares a score with PyBullet.
 
 ## Recovery
 

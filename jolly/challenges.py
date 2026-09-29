@@ -49,6 +49,14 @@ CHALLENGES: dict[str, Challenge] = {
         success="Tool-to-goal error <= 7 cm and no collision.",
         max_commands=10,
     ),
+    "drop-in-hole": Challenge(
+        id="drop-in-hole",
+        name="Drop in hole",
+        scene="insertion",
+        description="Grasp the generated peg and physically release it through the generated opening.",
+        success="The peg settles inside the opening below the rim without robot contact.",
+        max_commands=12,
+    ),
 }
 
 
@@ -97,11 +105,25 @@ def evaluate(challenge_id: str, state: dict[str, object]) -> dict[str, object]:
         inside = bounds["x"][0] <= position[0] <= bounds["x"][1] and bounds["y"][0] <= position[1] <= bounds["y"][1]
         success = inside and position[2] >= bounds["minimum_z"]
         metrics = {"inside_shelf_xy": inside, "cargo_height_meters": position[2]}
-    else:
+    elif challenge_id == "obstacle-reach":
         goal = instance["target"]
         error = math.dist(ee, goal)
         success = error <= 0.07 and not collision
         metrics = {"goal_error_meters": round(error, 6), "collision_free": not collision}
+    else:
+        peg = objects["peg"]["position"]
+        target = instance["target"]
+        error = math.dist(peg[:2], target[:2])
+        rim_height = float(instance["rim_height"])
+        inside = error <= float(instance["hole_radius"]) and peg[2] < rim_height
+        success = inside and state.get("held_object") is None and not collision
+        metrics = {
+            "target_xy_error_meters": round(error, 6),
+            "peg_height_meters": peg[2],
+            "below_rim": peg[2] < rim_height,
+            "released": state.get("held_object") is None,
+            "collision_free": not collision,
+        }
     command_count = int(state.get("challenge_commands", 0))
     within_budget = command_count <= challenge.max_commands
     success = success and within_budget

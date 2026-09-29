@@ -65,9 +65,11 @@ def test_cli_lists_scenes_and_challenges(tmp_path, monkeypatch) -> None:
 def test_cli_benchmark_passes(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("JOLLY_STATE_DIR", str(tmp_path))
     runner = CliRunner()
-    data = json.loads(invoke(runner, ["benchmark", "--json"]).output)
+    data = json.loads(invoke(runner, ["benchmark", "--seed", "1", "--cases", "1", "--json"]).output)
     assert data["ok"] is True
-    assert data["score"] == 100.0
+    assert 0 < data["score"] < 100
+    assert data["score_basis"].startswith("Measured")
+    assert any(task["name"] == "randomized-drop-in-hole" for task in data["tasks"])
 
 
 def test_cli_motion_error_is_json(tmp_path, monkeypatch) -> None:

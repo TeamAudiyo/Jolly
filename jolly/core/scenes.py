@@ -36,6 +36,17 @@ SCENES: dict[str, dict[str, object]] = {
             {"name": "barrier_right", "kind": "box", "position": [0.22, 0.09, 0.11], "size": [0.05, 0.09, 0.22], "color": [0.85, 0.22, 0.18, 1.0], "mass": 0.0, "graspable": False},
         ],
     },
+    "insertion": {
+        "description": "A physical peg must be released through a raised square opening.",
+        "objects": [
+            {"name": "peg", "kind": "box", "position": [0.30, -0.14, 0.05], "size": [0.024, 0.024, 0.10], "color": [0.16, 0.58, 0.96, 1.0], "mass": 0.06, "graspable": True},
+            {"name": "hole_bottom", "kind": "box", "position": [0.27, 0.16, 0.012], "size": [0.09, 0.09, 0.024], "color": [0.18, 0.22, 0.28, 1.0], "mass": 0.0, "graspable": False},
+            {"name": "hole_left", "kind": "box", "position": [0.27, 0.105, 0.07], "size": [0.12, 0.035, 0.12], "color": [0.70, 0.48, 0.20, 1.0], "mass": 0.0, "graspable": False},
+            {"name": "hole_right", "kind": "box", "position": [0.27, 0.215, 0.07], "size": [0.12, 0.035, 0.12], "color": [0.70, 0.48, 0.20, 1.0], "mass": 0.0, "graspable": False},
+            {"name": "hole_front", "kind": "box", "position": [0.215, 0.16, 0.07], "size": [0.035, 0.075, 0.12], "color": [0.70, 0.48, 0.20, 1.0], "mass": 0.0, "graspable": False},
+            {"name": "hole_back", "kind": "box", "position": [0.325, 0.16, 0.07], "size": [0.035, 0.075, 0.12], "color": [0.70, 0.48, 0.20, 1.0], "mass": 0.0, "graspable": False},
+        ],
+    },
 }
 
 

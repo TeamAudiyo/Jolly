@@ -1,7 +1,14 @@
 # Jolly CLI
 
-Jolly is a local robot-arm physics simulator for terminal users and LLM agents.
-It uses PyBullet in deterministic direct mode and saves state between commands.
+Jolly provides two separate robot-control backends for terminal users and LLM
+agents:
+
+- `JollyEngine` executes measured contact tasks with the official SO-101 model
+  in PyBullet.
+- `SO101HardwareDriver` sends the real STS3215 serial protocol to a physical
+  SO-101 and reads measured motor positions.
+
+The two backends never combine their scores.
 
 Jolly includes two offline robot profiles:
 
@@ -63,7 +70,7 @@ jolly move --joints "0,-20,40,-20,0" --gripper 0.0 --json
 jolly reach --x 0.30 --y 0.10 --z 0.18 --gripper 0.0 --json
 jolly render
 jolly challenge list --json
-jolly benchmark --json
+jolly benchmark --seed 42017 --cases 3 --model so101 --json
 ```
 
 Start the optional local web viewer:
@@ -104,7 +111,8 @@ Important commands:
 | `jolly reset` | Select a model and scene, then home the robot. |
 | `jolly scene list/load` | Discover and load deterministic scenes. |
 | `jolly challenge list/start/status` | Run seeded randomized manipulation challenges. |
-| `jolly benchmark [--seed N] [--cases N]` | Run randomized engine checks with reproducible inputs. |
+| `jolly benchmark [--seed N] [--cases N]` | Execute randomized reach, obstacle, and drop-in-hole contact tasks. |
+| `jolly hardware state/move/benchmark/stop` | Control and measure a physical SO-101 over its serial bus. |
 
 Jolly rejects joint-limit violations and unsafe workspace targets. By default,
 Jolly rolls back a motion that creates a collision. Use `--allow-collision`
@@ -148,10 +156,10 @@ jolly-cli/
 
 ## Physics scope
 
-`JollyEngine` owns state, safety, motion rollback, grasping, rendering, and the
-public simulator contract. `JollyDriver` generates seeded challenge and
-benchmark cases. The project does not depend on Inspect, Inspect AI, or an
-external robotics benchmark driver.
+`JollyEngine` owns state, safety, motion rollback, constrained grasping,
+rendering, and the physics-task contract. `JollyDriver` generates seeded
+challenge and benchmark cases. The project does not depend on Inspect, Inspect
+AI, or an external robotics benchmark driver.
 
 PyBullet is the low-level open-source physics backend. It performs rigid-body
 simulation, FK, IK, contact generation, and scene settling. Jolly uses
@@ -171,9 +179,43 @@ jolly challenge start sort-red --seed 42017 --json
 jolly benchmark --seed 42017 --cases 5 --json
 ```
 
-The benchmark generates new joint configurations for every robot case and new
-object layouts for every scene case. This prevents a policy from passing only by
-memorizing the original fixed coordinates.
+The benchmark physically executes randomized reach, obstacle avoidance, and
+drop-in-hole tasks. Its score comes from measured reach error, collisions, grasp
+state, physical release, and final peg pose. A generated health check does not
+add points. Different seeds can produce different scores.
+
+## Physical SO-101 hardware
+
+Install direct physical-hardware support:
+
+```bash
+python -m pip install 'jolly-cli[hardware]'
+```
+
+Jolly implements the Feetech STS3215 packet protocol directly. It does not use
+Inspect Robots or an external robot SDK. Copy and calibrate the example file
+before enabling torque:
+
+```bash
+jolly hardware calibration-example --output so101-calibration.json
+# Replace every placeholder with measurements from this physical arm.
+jolly hardware scan --port /dev/ttyACM0 --calibration so101-calibration.json --json
+jolly hardware state --port /dev/ttyACM0 --calibration so101-calibration.json --json
+jolly hardware move --port /dev/ttyACM0 --calibration so101-calibration.json \
+  --joints '0,0,0,0,0' --gripper 0 --confirm-hardware --json
+jolly hardware benchmark --port /dev/ttyACM0 --calibration so101-calibration.json \
+  --seed 42017 --cases 3 --confirm-hardware --json
+jolly hardware stop --port /dev/ttyACM0 --calibration so101-calibration.json
+```
+
+The example calibration values are placeholders. Measure every zero point,
+direction, and gripper endpoint on the physical arm before movement. Physical
+commands require an explicit confirmation, enforce bounded steps, read motor
+feedback, return to the starting pose, and disable torque after benchmarking.
+
+The physical benchmark scores measured joint-position error only. The physics
+benchmark scores contact tasks only. Jolly never presents physics output as a
+physical-hardware result.
 
 The bundled SO-101 model is the official Apache-2.0 new-calibration URDF from
 The Robot Studio. Jolly includes the 13 referenced STL meshes from pinned commit

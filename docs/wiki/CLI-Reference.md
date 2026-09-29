@@ -23,12 +23,24 @@ jolly scene load blocks --json
 jolly challenge list --json
 jolly challenge start sort-red --model jolly6 [--seed N] --json
 jolly challenge status --json
-jolly benchmark [--seed N] [--cases 3] --json
+jolly benchmark [--seed N] [--cases 3] [--model so101] --json
 ```
 
 Challenge starts use a fresh random seed by default. The JSON response contains
 the seed and generated instance. Supply `--seed N` to replay the exact case.
-The benchmark randomizes every robot and scene check through `JollyDriver`.
+The benchmark executes randomized reach, obstacle, and drop-in-hole tasks through `JollyDriver`.
+
+## Physical SO-101
+
+```bash
+jolly hardware scan --port /dev/ttyACM0 --calibration calibration.json --json
+jolly hardware state --port /dev/ttyACM0 --calibration calibration.json --json
+jolly hardware move --port /dev/ttyACM0 --calibration calibration.json --joints "0,0,0,0,0" --gripper 0 --confirm-hardware --json
+jolly hardware benchmark --port /dev/ttyACM0 --calibration calibration.json --seed 42 --cases 3 --confirm-hardware --json
+jolly hardware stop --port /dev/ttyACM0 --calibration calibration.json
+```
+
+Physics and physical-hardware results use separate benchmark names and scores.
 
 ## Viewers
 
