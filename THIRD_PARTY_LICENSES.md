@@ -32,3 +32,17 @@ Apache License 2.0 grants no trademark rights. Jolly does not claim endorsement
 by The Robot Studio or Hugging Face.
 
 The full Apache License 2.0 appears in `LICENSE-APACHE`.
+
+## SO-ARM100 / SO-100 robot model
+
+Jolly redistributes the unmodified official SO-100 URDF and its 13 STL meshes
+under `jolly/assets/robots/so100/`.
+
+- Source: https://github.com/TheRobotStudio/SO-ARM100
+- Pinned commit: `5f6d2b876a53a4872e405b991dd925556c9e38a4`
+- Upstream file: `Simulation/SO100/so100.urdf`
+- License: Apache License 2.0; bundled as `LICENSE-APACHE`
+- Modifications: None. Jolly selects `gripper` as its end-effector link.
+
+No Koch model is redistributed. The Koch v1.1 source has no URDF. Jolly does
+not substitute the differently configured Koch v1.0 model.

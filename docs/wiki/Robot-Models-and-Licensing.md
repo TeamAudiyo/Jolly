@@ -26,3 +26,12 @@ redistribute PyBullet source or binaries.
 Jolly code and original assets are dual-licensed. Users can choose the MIT
 License or Apache License 2.0. See `LICENSE-MIT`, `LICENSE-APACHE`, and
 `THIRD_PARTY_LICENSES.md` in the repository.
+
+## SO-100 and configurable arms
+
+SO-100 ships the official unmodified URDF and 13 meshes from the same pinned
+SO-ARM100 commit under Apache-2.0. Koch hardware supports joint controls through
+LeRobot. Koch Cartesian controls require a matching configured URDF because the
+Koch v1.1 source has no URDF. Jolly does not substitute Koch v1.0 geometry.
+`JOLLY_ARM_CONFIG` registers additional URDFs with explicit source and license.
+All hardware integrations remain physically unverified.

@@ -41,7 +41,7 @@ jolly state --json
 ```
 
 Read `model.dof` before you construct a joint command. `jolly6` needs six arm
-angles. `so101` needs five arm angles.
+angles. `so100` and `so101` need five arm angles. Discover configured arms with `jolly arm list --json`.
 
 ## Move by joint angles
 
@@ -91,11 +91,17 @@ jolly benchmark score --json
 Read the generated `seed` and `instance` before planning. Never assume fixed
 coordinates from an earlier run. Pass `--seed N` only to replay a case.
 
-Jolly's PyBullet benchmark never moves the robot automatically. Read the
-generated peg and hole coordinates, then issue every approach, descend, grasp,
-lift, translate, lower, and release control. `benchmark score` measures the
-result without moving the robot and returns PASS or FAIL with no numeric score.
-Physical hardware uses the separate `jolly hardware benchmark` command.
+The measured benchmark never solves the task. Read the generated part/pad
+coordinates. Issue every approach, descent, grasp, lift, carry, lower, and release
+control. Use measured object positions to correct placement, not only tool pose.
+Score records XY placement error and cumulative success percentage. Use `next`
+only after scoring. Use `report` and `history` to inspect all trials.
+
+Hardware uses `jolly arm ... --confirm-hardware --config FILE`. Never fall back
+to simulation when hardware fails. Require calibrated joint mapping and workspace.
+Grasp/collision evidence must come from an independent sensor, not motor feedback.
+Missing measurement providers emit no numeric score. Stop and support the arm
+before torque disable. Treat all hardware integrations as physically unverified.
 
 ## Recovery
 

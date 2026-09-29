@@ -8,3 +8,4 @@
 - [Physical SO-101 Hardware](Physical-SO-101-Hardware)
 - [LLM Agent Safety](LLM-Agent-Safety)
 - [Web Viewer](Web-Viewer)
+- [Multi-Arm Benchmark](Multi-Arm-Benchmark)

@@ -83,6 +83,7 @@ class JollyEngine:
         self.held_object: str | None = None
         self.grasp_constraint_id: int | None = None
         self.gripper = 0.0
+        self.motion_collision = False
         try:
             self._load_world()
         except Exception:
@@ -196,7 +197,10 @@ class JollyEngine:
         for raw_spec in scene["objects"]:
             spec = dict(raw_spec)
             half_extents = [float(value) / 2.0 for value in spec["size"]]
-            collision = p.createCollisionShape(p.GEOM_BOX, halfExtents=half_extents, physicsClientId=self.client)
+            collision = (
+                p.createCollisionShape(p.GEOM_BOX, halfExtents=half_extents, physicsClientId=self.client)
+                if spec.get("collidable", True) else -1
+            )
             visual = p.createVisualShape(
                 p.GEOM_BOX,
                 halfExtents=half_extents,
@@ -289,6 +293,7 @@ class JollyEngine:
         steps: int = 120,
         allow_collision: bool = False,
     ) -> dict[str, object]:
+        self.motion_collision = False
         if len(degrees) != self.model.dof:
             raise MotionError(f"Model '{self.model.id}' needs {self.model.dof} joint angles, received {len(degrees)}.")
         if not all(math.isfinite(float(value)) for value in degrees):
@@ -317,6 +322,7 @@ class JollyEngine:
             p.stepSimulation(physicsClientId=self.client)
             ignored_grasp = self._contacting_graspable() if gripper is not None and float(gripper) >= 0.75 else None
             if self.collisions(ignored_grasp=ignored_grasp)["collision"]:
+                self.motion_collision = True
                 collision_detected = True
                 if not allow_collision:
                     break
@@ -337,6 +343,7 @@ class JollyEngine:
         self._step(8)
         self._clamp_arm_to_limits()
         final_collisions = self.collisions()
+        self.motion_collision = self.motion_collision or bool(final_collisions["collision"])
         if final_collisions["collision"] and not allow_collision:
             for info, value in zip(self.arm_joints, start, strict=True):
                 p.resetJointState(self.robot_id, info.index, value, physicsClientId=self.client)
@@ -348,7 +355,14 @@ class JollyEngine:
                 self._attach_grasp_constraint(self.held_object)
             self._hold_current_pose()
             raise MotionError("Motion rolled back because settling created a collision.")
-        return self.state()
+        result = self.state()
+        result["motion_collision"] = self.motion_collision
+        return result
+
+    def settle(self, steps: int = 1200) -> None:
+        """Advance the physical scene while the arm holds its current pose."""
+        self._hold_current_pose()
+        self._step(steps)
 
     def _clamp_arm_to_limits(self) -> None:
         for info in self.arm_joints:

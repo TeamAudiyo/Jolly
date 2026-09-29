@@ -90,3 +90,23 @@ class JollyDriver:
             margin = (high - low) * 0.18
             joints.append(round(rng.uniform(low + margin, high - margin), 6))
         return {"seed": case_seed, "joints_degrees": joints}
+
+    def pick_place_instance(self, workspace: list[list[float]] | None = None) -> dict[str, Any]:
+        case_seed, rng = self._case_random()
+        # Compact reachable bands; keep pickup and destination separated.
+        bounds = workspace or [[0.27, 0.33], [-0.17, 0.17], [0.01, 0.36]]
+        pick_y = rng.uniform(bounds[1][0], bounds[1][0] * 0.6)
+        place_y = rng.uniform(bounds[1][1] * 0.6, bounds[1][1])
+        positions = {}
+        for index in range(3):
+            positions[f"pick_slot_{index}"] = self._point(rng.uniform(*bounds[0]), pick_y, 0.006)
+            positions[f"place_slot_{index}"] = self._point(rng.uniform(*bounds[0]), place_y, 0.006)
+        pick = f"pick_slot_{rng.randrange(3)}"
+        place = f"place_slot_{rng.randrange(3)}"
+        # Only the selected pads are physical; the other slots are planned candidates.
+        selected = {pick: positions[pick], place: positions[place]}
+        selected["part"] = [*positions[pick][:2], 0.05]
+        return {"seed": case_seed, "scene": "pickplace", "object_name": "part",
+                "pick_slot": pick, "place_slot": place, "target": positions[place],
+                "target_kind": "pad", "object_positions": selected,
+                "candidate_slots": positions}

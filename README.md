@@ -1,48 +1,46 @@
 # Jolly CLI
 
-Jolly provides two separate robot-control backends for terminal users and LLM
-agents:
+Jolly runs explicit terminal controls and measures randomized pick-and-place trials.
+Simulation uses real PyBullet rigid bodies. Hardware uses LeRobot motor I/O and
+an independent object measurement provider. Jolly never scores commanded
+coordinates, IK output, or motor positions as object placement.
 
-- `JollyEngine` executes explicit operator controls with the official SO-101
-  model in PyBullet, then measures the final physical state.
-- `SO101HardwareDriver` sends the real STS3215 serial protocol to a physical
-  SO-101 and reads measured motor positions.
+| Arm | Simulation / Cartesian model | Hardware integration | Physically verified |
+| --- | --- | --- | --- |
+| SO-100 | Official bundled URDF | LeRobot Feetech, implemented | No |
+| SO-101 | Official bundled URDF | LeRobot Feetech, implemented | No |
+| Koch | Matching configured URDF required | LeRobot Dynamixel, implemented | No |
+| jolly6 | Original bundled six-axis arm | Simulation only | No |
+| Additional arms | Explicit registered URDF | Configured LeRobot class | No |
 
-The two backends never combine their results.
+Core simulation works offline. Hardware requires calibration and real sensors.
+No cloud service, MCP server, or API key is required.
 
-Jolly includes two offline robot profiles:
-
-- `jolly6`: an original six-axis arm with a parallel gripper.
-- `so101`: the official five-axis SO-101 URDF and CAD meshes with a gripper.
-
-The package also accepts scenes, challenges, an engine benchmark, a native
-PyBullet viewer, and an optional local web viewer. No cloud service, MCP server,
-API key, or network connection is required at runtime.
-
-## See Jolly 0.5.0 in action
+## See Jolly 0.6.0 in action
 
 ### Interactive SO-101 simulator
 
-![Jolly web viewer executing a Cartesian reach in the insertion scene](docs/assets/jolly-web-demo.gif)
+![Jolly web viewer executing a explicit pick-and-place controls](docs/assets/jolly-web-measured-v060.gif)
 
-[Watch the full WebM recording](docs/assets/jolly-web-demo.webm) ·
-[Open the full-resolution still](docs/assets/jolly-so101-viewer.png)
+[Watch the full WebM recording](docs/assets/jolly-web-measured-v060.webm) ·
+[Open the full-resolution still](docs/assets/jolly-so101-measured-v060.png)
 
 The recording uses the official SO-101 CAD meshes in a real PyBullet world. It
-executes a Cartesian reach in the insertion scene. The viewport is not a
+executes a explicit pick-and-place controls. The viewport is not a
 diagram or a hand-drawn robot substitute.
 
 ### Operator-controlled randomized pick-and-place
 
-![Jolly 0.5.0 terminal demo showing explicit pick-and-place controls](docs/assets/jolly-terminal-pick-place-v050.gif)
+![Jolly 0.6.0 terminal demo showing explicit pick-and-place controls](docs/assets/jolly-terminal-measured-v060.gif)
 
-[Watch the MP4 recording](docs/assets/jolly-terminal-pick-place-v050.mp4)
+[Watch the MP4 recording](docs/assets/jolly-terminal-measured-v060.mp4)
 
-The terminal recording shows every control: move above the peg, move down,
-close the gripper, lift, move sideways, lower, and release. `benchmark score`
-does not move the robot and does not generate a numeric score. It reports PASS
-only from the final measured peg pose, release state, collision state, and
-command budget.
+The terminal recording shows approach, descent, grasp, lift, sideways motion,
+alignment, lowering, and release. Each command runs against PyBullet. A second
+trial deliberately places the part at the wrong destination. The recording shows
+measured error for both trials and the resulting numeric success percentage.
+The benchmark does not solve trials. Scoring advances physics to settle the part,
+but sends no robot motion command.
 
 ## Install
 
@@ -81,7 +79,7 @@ jolly reach --x 0.30 --y 0.10 --z 0.18 --gripper 0.0 --json
 jolly render
 jolly challenge list --json
 jolly benchmark start --seed 42017 --model so101 --json
-# Issue explicit jolly reach controls using the generated peg and hole coordinates.
+# Read the generated part and pad coordinates, then issue explicit controls.
 jolly benchmark score --json
 ```
 
@@ -123,7 +121,8 @@ Important commands:
 | `jolly reset` | Select a model and scene, then home the robot. |
 | `jolly scene list/load` | Discover and load deterministic scenes. |
 | `jolly challenge list/start/status` | Run seeded randomized manipulation challenges. |
-| `jolly benchmark start/score` | Generate a randomized pick-and-place task, accept explicit controls, then measure PASS or FAIL. |
+| `jolly benchmark start/status/score/next/report/history` | Run randomized measured trials; report success percentage and placement error. |
+| `jolly arm list/state/move/reach/stop` | Use calibrated LeRobot hardware without simulator fallback. |
 | `jolly hardware state/move/benchmark/stop` | Control and measure a physical SO-101 over its serial bus. |
 
 Jolly rejects joint-limit violations and unsafe workspace targets. By default,
@@ -193,12 +192,79 @@ jolly benchmark start --seed 42017 --model so101 --json
 jolly benchmark score --json
 ```
 
-Benchmark start generates the randomized peg and hole but executes no motion.
-Only explicit `jolly reach` or `jolly move` commands can change the attempt.
-Benchmark score executes no motion and returns no numeric score. PASS requires
-the released peg to settle inside the generated hole without collision and
-within the command budget. The JSON result includes every requested control and
-its measured tool, gripper, grasp, and collision state.
+Benchmark start plans three randomized pickup/pad layouts by default and sends
+no task motion. Use `--trials N` to change the count. Only explicit controls move
+the robot. Score records one immutable trial. Next refuses to skip unscored trials.
+
+```bash
+jolly benchmark start --arm so101 --seed 1 --trials 3 --json
+jolly benchmark status --json
+# Approach, descend, grasp, lift, carry, lower, release with reach/move.
+jolly benchmark score --json
+jolly benchmark next --json
+# Control and score the remaining trials.
+jolly benchmark report --json
+jolly benchmark history --json
+```
+
+Success percentage is `100 * successful_trials / completed_trials`. Placement
+error is measured XY center distance in meters. Reports include mean/min/max,
+successful-only mean, per-trial coordinates, source, timestamps, and controls.
+Before scoring, the score is null. Partial reports set `complete: false`.
+
+Simulation success requires recorded grasp, release, pad contact, correct height,
+stability, no collision, and placement within 0.02 m. Command/time budgets also
+apply. The constrained-grasp helper is not a physical finger-contact model.
+Old 0.5.0 benchmark state requires `benchmark start`. Reset and scene changes
+archive the previous session. Scored trials reject further controls.
+
+### LeRobot hardware and object measurements
+
+LeRobot 0.6 requires Python 3.12 or later and NumPy 2. Install the selected bus:
+
+```bash
+python -m pip install 'jolly-cli[arms-feetech]'   # SO-100 / SO-101
+python -m pip install 'jolly-cli[arms-dynamixel]' # Koch
+```
+
+Some PyBullet wheels use the NumPy 1 ABI. With NumPy 2, build PyBullet against
+the installed NumPy using a C++ toolchain:
+
+```bash
+python -m pip install wheel setuptools 'numpy>=2,<2.3'
+python -m pip install --force-reinstall --no-cache-dir --no-build-isolation \
+  --no-binary pybullet pybullet==3.2.7
+```
+
+Calibrate through LeRobot first. Supply measured joint mappings, gripper endpoints,
+limits, and workspace. Connections can configure motors. Support the arm before
+connection or torque disable. Motion uses a 10-degree joint cap and a 0.2 gripper
+cap per command. Successful disconnect keeps torque enabled. Failures attempt
+torque disable; use a physical power cutoff if transport fails.
+
+```bash
+jolly arm list --json
+jolly arm state --arm so101 --config arm.json --confirm-hardware --json
+jolly benchmark start --backend hardware --arm so101 --arm-config arm.json \
+  --measurement-config sensor.json --trials 3 --json
+# Place the physical part and pad at the generated coordinates. Enter arm controls.
+jolly arm reach --arm so101 --config arm.json --confirm-hardware \
+  --x 0.30 --y -0.14 --z 0.15 --json
+jolly benchmark score --json
+jolly arm stop --arm so101 --config arm.json --confirm-hardware --json
+```
+
+Hardware scoring requires fresh object and pad measurements in the robot-base
+frame. A tracker supplies trial-specific sensor evidence for grasp, release,
+collision, support, and stability. Missing evidence cannot produce success.
+A calibrated ArUco camera measures full 3D marker pose with marker-to-object
+offset. A camera frame alone cannot certify grasp/collision history; configure
+an additional evidence tracker. Planar tracker coordinates report planar-only
+verification and omit 3D distance. Provider errors emit no numeric score.
+Hardware errors during controls abort the trial and preserve the attempted input.
+
+See [Multi-arm configuration and measurement contract](docs/wiki/Multi-Arm-Benchmark.md)
+for complete file schemas. No physical arm or camera was available for verification.
 
 ## Physical SO-101 hardware
 
@@ -233,7 +299,7 @@ After successful movement it keeps torque enabled so the arm does not fall.
 Support the arm before running `jolly hardware stop`.
 
 The physical benchmark scores measured joint-position error only. The PyBullet
-operator benchmark returns a measured PASS or FAIL without a numeric score.
+benchmark reports measured object placement and numeric trial success percentage.
 Jolly never presents physics output as a physical-hardware result.
 
 The bundled SO-101 model is the official Apache-2.0 new-calibration URDF from

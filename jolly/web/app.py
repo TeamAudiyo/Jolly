@@ -10,8 +10,8 @@ from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from jolly import __version__
-from jolly.benchmark import BENCHMARK_METADATA_KEYS, benchmark_control_history
-from jolly.core.errors import JollyError
+from jolly.benchmark import BENCHMARK_METADATA_KEYS, benchmark_control_history, ensure_control_allowed
+from jolly.core.errors import ConfigurationError, JollyError, MotionError
 from jolly.core.models import list_models
 from jolly.engine import JollyEngine
 from jolly.core.scenes import list_scenes
@@ -63,10 +63,27 @@ def _run(
         selected_model = model or (str(saved["model"]["id"]) if saved else "so101")
         selected_scene = scene or (str(saved.get("scene", "empty")) if saved else "empty")
         try:
+            if saved and saved.get("backend") == "hardware" and preserve_metadata:
+                raise HTTPException(status_code=400, detail={"type": "ConfigurationError", "message": "Hardware benchmark cannot use simulator API controls."})
+            if count_challenge_command:
+                ensure_control_allowed(saved or {})
             with JollyEngine(selected_model, selected_scene) as engine:
                 if saved and saved.get("model", {}).get("id") == selected_model and saved.get("scene") == selected_scene:
                     engine.restore(saved)
-                state = operation(engine)
+                try:
+                    state = operation(engine)
+                except MotionError as exc:
+                    if saved and saved.get("active_benchmark") and benchmark_control:
+                        command, requested = benchmark_control
+                        result = engine.state()
+                        result["motion_collision"] = engine.motion_collision
+                        result["control_error"] = str(exc)
+                        saved["benchmark_controls"] = benchmark_control_history(
+                            saved, source="web-api", command=command,
+                            requested={**requested, "error": str(exc)}, result=result,
+                        )
+                        save_state(saved)
+                    raise
                 if not isinstance(state, dict):
                     state = engine.state()
                 if preserve_metadata and saved and "active_challenge" in saved:
@@ -131,6 +148,8 @@ def render_image(
     with state_lock():
         try:
             saved = load_state()
+            if saved and saved.get("backend") == "hardware":
+                raise ConfigurationError("Hardware benchmark cannot render a substituted simulator world.")
             selected_model = str(saved["model"]["id"]) if saved else "so101"
             selected_scene = str(saved.get("scene", "empty")) if saved else "empty"
             with JollyEngine(selected_model, selected_scene) as engine:

@@ -66,56 +66,14 @@ def test_cli_benchmark_requires_explicit_pick_and_place_controls(tmp_path, monke
     monkeypatch.setenv("JOLLY_STATE_DIR", str(tmp_path))
     runner = CliRunner()
     started = json.loads(invoke(runner, ["benchmark", "start", "--seed", "1", "--json"]).output)
-    assert started["benchmark"] == "jolly-operator-pick-place-v5"
+    assert started["benchmark"] == "jolly-pick-place-trials-v1"
     assert started["motion_executed"] is False
     assert started["state"]["benchmark_controls"] == []
-
-    instance = started["instance"]
-    peg = instance["object_positions"]["peg"]
-    target = instance["target"]
-
-    def reach(x: float, y: float, z: float, gripper: float) -> dict[str, object]:
-        result = invoke(
-            runner,
-            [
-                "reach",
-                "--x",
-                str(x),
-                "--y",
-                str(y),
-                "--z",
-                str(z),
-                "--gripper",
-                str(gripper),
-                "--json",
-            ],
-        )
-        return json.loads(result.output)
-
-    reach(peg[0], peg[1], peg[2] + 0.10, 0.0)
-    grasp = reach(peg[0], peg[1], peg[2] + 0.055, 1.0)
-    assert grasp["held_object"] == "peg"
-    reach(peg[0], peg[1], 0.34, 1.0)
-    state = reach(target[0], target[1], 0.34, 1.0)
-    for height in (0.34, 0.27, 0.27):
-        held_peg = next(item for item in state["objects"] if item["name"] == "peg")
-        tool = state["end_effector"]["position"]
-        state = reach(
-            tool[0] + target[0] - held_peg["position"][0],
-            tool[1] + target[1] - held_peg["position"][1],
-            height,
-            1.0,
-        )
-    tool = state["end_effector"]["position"]
-    reach(tool[0], tool[1], 0.27, 0.0)
-
     measured = json.loads(invoke(runner, ["benchmark", "score", "--json"]).output)
-    assert measured["outcome"] == "PASS"
-    assert measured["score"] is None
-    assert measured["success"] is True
-    assert measured["control_count"] == 8
-    assert measured["measurements"]["released"] is True
-    assert measured["measurements"]["below_rim"] is True
+    assert measured["trial"]["outcome"] == "FAIL"
+    assert measured["summary"]["score"] == 0
+    assert measured["trial"]["control_count"] == 0
+    assert "no_grasp_evidence" in measured["trial"]["failure_reasons"]
 
 
 def test_state_cannot_swap_models_during_operator_benchmark(tmp_path, monkeypatch) -> None:

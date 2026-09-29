@@ -46,12 +46,12 @@ def test_web_preserves_and_records_operator_benchmark(tmp_path, monkeypatch) -> 
     )
     assert started_result.exit_code == 0, started_result.output
     started = json.loads(started_result.output)
-    peg = started["instance"]["object_positions"]["peg"]
+    peg = started["instance"]["object_positions"]["part"]
 
     client = TestClient(app)
     read_state = client.get("/api/state")
     assert read_state.status_code == 200
-    assert read_state.json()["active_benchmark"] == "jolly-operator-pick-place-v5"
+    assert read_state.json()["active_benchmark"] == "jolly-pick-place-trials-v1"
     assert read_state.json()["benchmark_controls"] == []
 
     reached = client.post(
@@ -73,5 +73,5 @@ def test_web_preserves_and_records_operator_benchmark(tmp_path, monkeypatch) -> 
     score = CliRunner().invoke(main, ["benchmark", "score", "--json"])
     assert score.exit_code == 0, score.output
     measured = json.loads(score.output)
-    assert measured["control_count"] == 1
-    assert measured["outcome"] == "FAIL"
+    assert measured["trial"]["control_count"] == 1
+    assert measured["trial"]["outcome"] == "FAIL"

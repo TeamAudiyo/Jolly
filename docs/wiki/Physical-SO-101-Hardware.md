@@ -26,10 +26,18 @@ the starting pose. Torque stays enabled to hold that pose. Support the arm
 before `jolly hardware stop`. Communication failures trigger a best-effort
 torque disable. Clear the workspace and keep an emergency power cutoff nearby.
 
-Physical hardware scores and PyBullet operator PASS or FAIL results are separate. Jolly
+Physical hardware scores and PyBullet measured object-placement results are separate. Jolly
 never labels a physics result as a physical-hardware result.
 
 Protocol and hardware references:
 
 - https://huggingface.co/docs/lerobot/en/so101
 - https://pages.switch-science.com/comparison/files/feetech/serial-sts/STS3215_datasheet.pdf
+
+## LeRobot object-placement benchmark
+
+The separate `jolly arm` group supports SO-100, SO-101, Koch and configured arms.
+The direct serial `jolly hardware` group remains unchanged. Its benchmark measures
+motor error, not object placement. See [Multi-Arm Benchmark](Multi-Arm-Benchmark)
+for independent object sensors and calibration requirements. No physical hardware
+was available for this release verification.

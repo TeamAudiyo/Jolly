@@ -20,17 +20,16 @@ jolly challenge status --json
 The start result contains a generated seed and instance. Use `--seed` to replay
 the exact case.
 
-`jolly benchmark start --json` generates a randomized peg and hole but does not
-move the robot. The operator must issue each `jolly reach` or `jolly move`
-control to approach, descend, grasp, lift, move sideways, lower, and release.
+The `pickplace` scene contains a part and randomized pickup/placement pads.
+`jolly benchmark start --trials 3 --json` plans trials without task motion.
+Issue approach, descent, grasp, lift, sideways motion, lowering, and release
+controls. `score` settles physics and measures object coordinates once.
+`next` activates the next layout. `report` calculates numeric success percentage
+and placement-error statistics from immutable scored trials.
 
-`jolly benchmark score --json` does not move the robot and returns no numeric
-score. It returns PASS only when the released peg settles inside the generated
-hole without collision and within the command budget. The result includes the
-full explicit control history and measured final state.
+Simulation measurements come directly from PyBullet world transforms. Hardware
+requires fresh independent sensor measurements. Commands and IK cannot score
+object placement. See [Multi-Arm Benchmark](Multi-Arm-Benchmark).
 
-Jolly uses its own `JollyEngine`, `JollyDriver`, and direct
-`SO101HardwareDriver`. It does not use Inspect, Inspect AI, or an external robot
-benchmark harness. PyBullet remains the local open-source rigid-body backend
-for physics tasks. Physical SO-101 results come only from STS3215 motor feedback
-and remain separate from the PyBullet PASS or FAIL result.
+The direct `hardware benchmark` remains a separate motor-feedback benchmark.
+No simulator result is presented as physical-hardware verification.

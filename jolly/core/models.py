@@ -31,6 +31,14 @@ class RobotModel:
 
 
 MODELS: dict[str, RobotModel] = {
+    "so100": RobotModel(
+        id="so100", name="SO-100 official simulation model", urdf="robots/so100/so100.urdf",
+        arm_joint_names=("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll"),
+        gripper_joint_names=("gripper",), end_effector_link="gripper",
+        home_degrees=(0.0, 90.0, -90.0, 0.0, 0.0),
+        description="Official SO-100 URDF and meshes; coordinate calibration differs from SO-101.",
+        source="TheRobotStudio/SO-ARM100 @ 5f6d2b876a53a4872e405b991dd925556c9e38a4", license="Apache-2.0",
+    ),
     "jolly6": RobotModel(
         id="jolly6",
         name="Jolly-6",
@@ -72,6 +80,11 @@ MODELS: dict[str, RobotModel] = {
 
 
 def get_model(model_id: str) -> RobotModel:
+    # Custom arm models are explicit and never substitute an existing arm.
+    from jolly.robots.registry import configured_models
+    custom = configured_models()
+    if model_id in custom:
+        return custom[model_id]
     try:
         return MODELS[model_id]
     except KeyError as exc:
@@ -84,4 +97,6 @@ def model_path(model: RobotModel) -> Path:
 
 
 def list_models() -> list[dict[str, object]]:
-    return [MODELS[key].export() for key in sorted(MODELS)]
+    from jolly.robots.registry import configured_models
+    models = {**MODELS, **configured_models()}
+    return [models[key].export() for key in sorted(models)]
