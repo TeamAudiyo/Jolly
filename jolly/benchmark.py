@@ -71,13 +71,13 @@ def _run_obstacle_task(model: str, instance: dict[str, Any]) -> dict[str, object
     started = time.perf_counter()
     weight = 25.0
     goal = [float(value) for value in instance["target"]]
-    target = [goal[0], goal[1], max(0.14, goal[2] + 0.12)]
+    target = [goal[0], goal[1], max(0.07, goal[2] + 0.045)]
     try:
         with JollyEngine(model=model, scene="obstacles") as engine:
             engine.set_object_positions(instance["object_positions"])
             state = engine.reach(*target, tolerance=0.07)
             actual = state["end_effector"]["position"]
-            error = math.dist(actual, target)
+            error = math.dist(actual, goal)
             collision_free = not state["collisions"]["collision"]
             score = weight * _bounded_accuracy(error, 0.02, 0.10)
             if not collision_free:
@@ -88,7 +88,7 @@ def _run_obstacle_task(model: str, instance: dict[str, Any]) -> dict[str, object
                 seed=int(instance["seed"]),
                 started=started,
                 score=score,
-                metrics={"target": target, "actual": actual, "error_meters": round(error, 6), "collision_free": collision_free},
+                metrics={"goal": goal, "commanded_target": target, "actual": actual, "goal_error_meters": round(error, 6), "collision_free": collision_free},
             )
     except Exception as exc:
         return _task_result(name="randomized-obstacle-reach", weight=weight, seed=int(instance["seed"]), started=started, score=0.0, metrics={"target": target}, error=str(exc))
@@ -104,7 +104,7 @@ def _run_drop_task(model: str, instance: dict[str, Any]) -> dict[str, object]:
         with JollyEngine(model=model, scene="insertion") as engine:
             engine.set_object_positions(instance["object_positions"])
             engine.reach(peg_start[0], peg_start[1], peg_start[2] + 0.10, gripper=0.0, tolerance=0.06)
-            grasp_state = engine.reach(peg_start[0], peg_start[1], peg_start[2] + 0.095, gripper=1.0, tolerance=0.07)
+            grasp_state = engine.reach(peg_start[0], peg_start[1], peg_start[2] + 0.055, gripper=1.0, tolerance=0.07)
             grasped = grasp_state["held_object"] == "peg"
             metrics["grasped"] = grasped
             if grasped:
@@ -126,10 +126,12 @@ def _run_drop_task(model: str, instance: dict[str, Any]) -> dict[str, object]:
             released = state["held_object"] is None
             collision_free = not state["collisions"]["collision"]
             inside = xy_error <= float(instance["hole_radius"]) and below_rim
-            score = 10.0 if grasped else 0.0
-            score += 15.0 * _bounded_accuracy(xy_error, 0.008, 0.06)
-            score += 20.0 if inside else (8.0 if below_rim else 0.0)
-            score += 5.0 if released and collision_free else 0.0
+            score = 0.0
+            if grasped:
+                score += 10.0
+                score += 15.0 * _bounded_accuracy(xy_error, 0.008, 0.06)
+                score += 20.0 if inside else (8.0 if below_rim and released else 0.0)
+                score += 5.0 if released and collision_free else 0.0
             metrics.update(
                 {
                     "final_position": peg["position"],
@@ -173,7 +175,7 @@ def run_benchmark(*, seed: int | None = None, cases: int = 3, model: str = "so10
     passed = sum(1 for task in tasks if task["passed"])
     return {
         "ok": passed == len(tasks),
-        "benchmark": "jolly-physical-tasks-v3",
+        "benchmark": "jolly-pybullet-contact-tasks-v4",
         "engine": JollyEngine.name,
         "driver": JollyDriver.name,
         "physics_backend": JollyEngine.physics_backend,
@@ -181,7 +183,7 @@ def run_benchmark(*, seed: int | None = None, cases: int = 3, model: str = "so10
         "seed": driver.seed,
         "cases": cases,
         "score": round(score, 2),
-        "score_basis": "Measured reach error, contact-safe motion, grasp state, physical release, and final peg pose.",
+        "score_basis": "PyBullet reach error, contact-safe motion, contact-confirmed grasp, constrained carry, release, and final peg pose.",
         "passed": passed,
         "total": len(tasks),
         "duration_ms": round((time.perf_counter() - started) * 1000, 3),

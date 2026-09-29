@@ -208,10 +208,13 @@ jolly hardware benchmark --port /dev/ttyACM0 --calibration so101-calibration.jso
 jolly hardware stop --port /dev/ttyACM0 --calibration so101-calibration.json
 ```
 
-The example calibration values are placeholders. Measure every zero point,
-direction, and gripper endpoint on the physical arm before movement. Physical
-commands require an explicit confirmation, enforce bounded steps, read motor
-feedback, return to the starting pose, and disable torque after benchmarking.
+The example calibration values are placeholders and set `calibrated` to false.
+Measure every zero point, direction, and gripper endpoint before setting it to
+true. Physical commands require an explicit confirmation, enforce degree and
+raw-count step limits, set bounded goal speed, issue simultaneous goals, and
+read motor feedback. The driver disables torque after communication failures.
+After successful movement it keeps torque enabled so the arm does not fall.
+Support the arm before running `jolly hardware stop`.
 
 The physical benchmark scores measured joint-position error only. The physics
 benchmark scores contact tasks only. Jolly never presents physics output as a

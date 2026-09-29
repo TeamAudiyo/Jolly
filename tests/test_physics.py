@@ -43,7 +43,7 @@ def test_scenes_create_objects() -> None:
 def test_grasp_helper_tracks_nearby_object() -> None:
     with PhysicsEngine(scene="blocks") as engine:
         engine.reach(0.30, -0.16, 0.10, gripper=0.0)
-        state = engine.reach(0.30, -0.16, 0.10, gripper=1.0)
+        state = engine.reach(0.30, -0.16, 0.07, gripper=1.0)
         assert state["held_object"] == "red_block"
         assert state["collisions"]["collision"] is False
         released = engine.reach(0.30, -0.16, 0.15, gripper=0.0)
@@ -54,11 +54,23 @@ def test_grasp_helper_tracks_nearby_object() -> None:
 def test_carried_object_floor_collision_rolls_back() -> None:
     with PhysicsEngine(scene="blocks") as engine:
         engine.reach(0.30, -0.16, 0.10, gripper=0.0)
-        grasped = engine.reach(0.30, -0.16, 0.10, gripper=1.0)
+        grasped = engine.reach(0.30, -0.16, 0.07, gripper=1.0)
         safe_position = grasped["end_effector"]["position"]
         with pytest.raises(MotionError, match="collision"):
             engine.reach(0.30, -0.16, 0.04, gripper=1.0)
         assert engine.state()["end_effector"]["position"] == pytest.approx(safe_position, abs=1e-4)
+
+
+def test_contact_grasp_constraint_physically_carries_object() -> None:
+    with PhysicsEngine(scene="blocks") as engine:
+        engine.reach(0.30, -0.16, 0.10, gripper=0.0)
+        grasped = engine.reach(0.30, -0.16, 0.07, gripper=1.0)
+        before = next(item["position"] for item in grasped["objects"] if item["name"] == "red_block")
+        carried = engine.reach(0.30, -0.16, 0.20, gripper=1.0, tolerance=0.06)
+        after = next(item["position"] for item in carried["objects"] if item["name"] == "red_block")
+        assert carried["held_object"] == "red_block"
+        assert after[2] > before[2] + 0.08
+        assert carried["collisions"]["collision"] is False
 
 
 def test_non_finite_inputs_rejected_clearly() -> None:

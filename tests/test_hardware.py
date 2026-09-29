@@ -18,7 +18,7 @@ def calibration_data() -> dict[str, object]:
         )
     }
     motors["gripper"] = {"id": 6, "open_raw": 1900, "closed_raw": 3000}
-    return {"motors": motors}
+    return {"calibrated": True, "motors": motors}
 
 
 def test_sts3215_packet_codec_uses_real_protocol_checksum() -> None:
@@ -51,6 +51,16 @@ def test_physical_calibration_rejects_duplicate_motor_ids(tmp_path) -> None:
         SO101Calibration.load(path)
 
 
+def test_physical_calibration_rejects_broadcast_id_and_unsafe_scale(tmp_path) -> None:
+    data = calibration_data()
+    data["motors"]["shoulder_pan"]["id"] = 0
+    data["motors"]["shoulder_lift"]["raw_per_degree"] = 100
+    path = tmp_path / "calibration.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(ConfigurationError, match="between 1 and 253"):
+        SO101Calibration.load(path)
+
+
 def test_hardware_motion_requires_explicit_confirmation(tmp_path) -> None:
     path = tmp_path / "calibration.json"
     path.write_text(json.dumps(calibration_data()), encoding="utf-8")
@@ -76,6 +86,26 @@ def test_cli_writes_loadable_physical_calibration_template(tmp_path) -> None:
     path = tmp_path / "calibration.json"
     result = CliRunner().invoke(main, ["hardware", "calibration-example", "--output", str(path)])
     assert result.exit_code == 0, result.output
+    template = json.loads(path.read_text(encoding="utf-8"))
+    assert template["calibrated"] is False
+    with pytest.raises(ConfigurationError, match="calibrated"):
+        SO101Calibration.load(path)
+    template["calibrated"] = True
+    path.write_text(json.dumps(template), encoding="utf-8")
     calibration = SO101Calibration.load(path)
     assert [calibration.motors[name].motor_id for name in calibration.motors] == [1, 2, 3, 4, 5]
     assert calibration.gripper.motor_id == 6
+
+
+def test_unopenable_physical_serial_port_returns_json_error(tmp_path) -> None:
+    pytest.importorskip("serial")
+    path = tmp_path / "calibration.json"
+    path.write_text(json.dumps(calibration_data()), encoding="utf-8")
+    result = CliRunner().invoke(
+        main,
+        ["hardware", "state", "--port", "/dev/jolly-port-does-not-exist", "--calibration", str(path), "--json"],
+    )
+    assert result.exit_code == 2
+    payload = json.loads(result.output)
+    assert payload["ok"] is False
+    assert "Could not open" in payload["error"]["message"]

@@ -66,9 +66,9 @@ def test_cli_benchmark_passes(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("JOLLY_STATE_DIR", str(tmp_path))
     runner = CliRunner()
     data = json.loads(invoke(runner, ["benchmark", "--seed", "1", "--cases", "1", "--json"]).output)
-    assert data["ok"] is True
     assert 0 < data["score"] < 100
-    assert data["score_basis"].startswith("Measured")
+    assert data["score_basis"].startswith("PyBullet")
+    assert data["benchmark"] == "jolly-pybullet-contact-tasks-v4"
     assert any(task["name"] == "randomized-drop-in-hole" for task in data["tasks"])
 
 

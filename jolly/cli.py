@@ -298,9 +298,9 @@ def challenge_status_command(challenge_id: str | None, json_output: bool) -> Non
 @click.option("model", "--model", type=click.Choice(["so101", "jolly6"]), default="so101", show_default=True)
 @click.option("json_output", "--json", is_flag=True)
 def benchmark_command(seed: int | None, cases: int, model: str, json_output: bool) -> None:
-    """Execute randomized motion and contact tasks in the physical world."""
+    """Execute randomized motion and contact tasks in PyBullet physics."""
     data = run_benchmark(seed=seed, cases=cases, model=model)
-    emit(data, json_output=json_output, message=f"Physical task score: {data['score']:.1f}/100 ({data['passed']}/{data['total']} tasks)")
+    emit(data, json_output=json_output, message=f"PyBullet contact-task score: {data['score']:.1f}/100 ({data['passed']}/{data['total']} tasks)")
 
 
 @main.group("hardware")
@@ -355,8 +355,7 @@ def hardware_move_command(port: str, calibration_path: str, joints: list[float],
         raise ConfigurationError("Physical movement requires --confirm-hardware after clearing the workspace.")
     with _hardware(port, calibration_path) as hardware:
         data = hardware.move(joints, gripper)
-        hardware.set_torque(False)
-    emit(data, json_output=json_output, message=f"Physical move completed with {data['max_error_degrees']:.2f}° maximum error.")
+    emit(data, json_output=json_output, message=f"Physical move completed with {data['max_error_degrees']:.2f}° maximum error. Torque remains enabled to hold the arm; support it before 'hardware stop'.")
 
 
 @hardware_group.command("benchmark")

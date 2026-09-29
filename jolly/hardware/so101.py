@@ -16,6 +16,7 @@ WRITE = 0x03
 SYNC_WRITE = 0x83
 TORQUE_ENABLE = 40
 GOAL_POSITION = 42
+GOAL_SPEED = 46
 PRESENT_POSITION = 56
 DEFAULT_IDS = (1, 2, 3, 4, 5, 6)
 JOINT_NAMES = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll")
@@ -29,6 +30,7 @@ def calibration_example() -> dict[str, object]:
     motors["gripper"] = {"id": 6, "open_raw": 2048, "closed_raw": 3072}
     return {
         "warning": "Placeholder values. Measure this physical arm before enabling torque.",
+        "calibrated": False,
         "motors": motors,
     }
 
@@ -90,6 +92,8 @@ class SO101Calibration:
     @classmethod
     def load(cls, path: str | Path) -> "SO101Calibration":
         data = json.loads(Path(path).read_text(encoding="utf-8"))
+        if data.get("calibrated") is not True:
+            raise ConfigurationError("Calibration must set 'calibrated' to true after physical measurements.")
         raw_motors = data.get("motors", {})
         missing = [name for name in JOINT_NAMES if name not in raw_motors]
         if missing or "gripper" not in raw_motors:
@@ -104,7 +108,9 @@ class SO101Calibration:
             for name in JOINT_NAMES
         }
         for name, motor in motors.items():
-            if motor.direction not in (-1, 1) or motor.raw_per_degree <= 0:
+            if not 1 <= motor.motor_id <= 253:
+                raise ConfigurationError(f"Motor ID for '{name}' must be between 1 and 253.")
+            if motor.direction not in (-1, 1) or not 5.0 <= motor.raw_per_degree <= 20.0:
                 raise ConfigurationError(f"Invalid calibration for '{name}'.")
         raw_gripper = raw_motors["gripper"]
         gripper = GripperCalibration(
@@ -112,6 +118,8 @@ class SO101Calibration:
             open_raw=int(raw_gripper["open_raw"]),
             closed_raw=int(raw_gripper["closed_raw"]),
         )
+        if not 1 <= gripper.motor_id <= 253 or not 0 <= gripper.open_raw <= 4095 or not 0 <= gripper.closed_raw <= 4095:
+            raise ConfigurationError("Invalid physical gripper calibration.")
         ids = [motor.motor_id for motor in motors.values()] + [gripper.motor_id]
         if len(set(ids)) != len(ids):
             raise ConfigurationError("Each SO-101 motor must have a unique ID.")
@@ -130,13 +138,21 @@ class SO101HardwareDriver:
             raise ConfigurationError("Install physical hardware support with: pip install 'jolly-cli[hardware]'") from exc
         self.port = port
         self.calibration = calibration
-        self.serial = serial.Serial(port=port, baudrate=baudrate, timeout=timeout, write_timeout=timeout)
+        try:
+            self.serial = serial.Serial(port=port, baudrate=baudrate, timeout=timeout, write_timeout=timeout)
+        except (serial.SerialException, OSError) as exc:
+            raise ConfigurationError(f"Could not open physical SO-101 serial port '{port}': {exc}") from exc
         self.serial.reset_input_buffer()
 
     def __enter__(self) -> "SO101HardwareDriver":
         return self
 
-    def __exit__(self, *_: object) -> None:
+    def __exit__(self, exc_type: object, *_: object) -> None:
+        if exc_type is not None:
+            try:
+                self.emergency_stop()
+            except Exception:
+                pass
         self.close()
 
     def close(self) -> None:
@@ -181,6 +197,14 @@ class SO101HardwareDriver:
     def _write(self, motor_id: int, address: int, values: bytes) -> None:
         self._transact(motor_id, WRITE, bytes((address,)) + values)
 
+    def _sync_write_u16(self, address: int, values: dict[int, int]) -> None:
+        parameters = bytearray((address, 2))
+        for motor_id, value in values.items():
+            parameters.append(motor_id)
+            parameters.extend(int(value).to_bytes(2, "little"))
+        self.serial.write(encode_packet(0xFE, SYNC_WRITE, bytes(parameters)))
+        self.serial.flush()
+
     def set_torque(self, enabled: bool) -> None:
         for motor_id in [motor.motor_id for motor in self.calibration.motors.values()] + [self.calibration.gripper.motor_id]:
             self._write(motor_id, TORQUE_ENABLE, bytes((1 if enabled else 0,)))
@@ -197,7 +221,7 @@ class SO101HardwareDriver:
         gripper_raw = self._read_u16(self.calibration.gripper.motor_id, PRESENT_POSITION)
         return {"ok": True, "driver": self.name, "port": self.port, "joints": joints, "gripper": {"motor_id": self.calibration.gripper.motor_id, "raw": gripper_raw}}
 
-    def move(self, joints_degrees: Sequence[float], gripper: float, *, max_delta_degrees: float = 20.0, timeout: float = 4.0) -> dict[str, object]:
+    def move(self, joints_degrees: Sequence[float], gripper: float | None, *, max_delta_degrees: float = 20.0, timeout: float = 4.0) -> dict[str, object]:
         if len(joints_degrees) != len(JOINT_NAMES) or not all(math.isfinite(float(value)) for value in joints_degrees):
             raise MotionError("Physical SO-101 movement requires five finite joint angles.")
         before = self.state()
@@ -209,22 +233,42 @@ class SO101HardwareDriver:
             name: self.calibration.motors[name].degrees_to_raw(float(target))
             for name, target in zip(JOINT_NAMES, joints_degrees, strict=True)
         }
-        targets["gripper"] = self.calibration.gripper.value_to_raw(gripper)
-        self.set_torque(True)
-        for name in JOINT_NAMES:
-            motor = self.calibration.motors[name]
-            self._write(motor.motor_id, GOAL_POSITION, int(targets[name]).to_bytes(2, "little"))
-        self._write(self.calibration.gripper.motor_id, GOAL_POSITION, int(targets["gripper"]).to_bytes(2, "little"))
-        deadline = time.monotonic() + timeout
-        result = self.state()
-        while time.monotonic() < deadline:
+        if gripper is not None:
+            targets["gripper"] = self.calibration.gripper.value_to_raw(gripper)
+        raw_before = {joint["name"]: int(joint["raw"]) for joint in before["joints"]}
+        raw_before["gripper"] = int(before["gripper"]["raw"])
+        for name, target_raw in targets.items():
+            limit = 512 if name == "gripper" else 256
+            if abs(int(target_raw) - raw_before[name]) > limit:
+                raise MotionError(f"Motor '{name}' exceeds the {limit}-count physical step limit.")
+        motor_targets = {
+            self.calibration.motors[name].motor_id: int(targets[name]) for name in JOINT_NAMES
+        }
+        if "gripper" in targets:
+            motor_targets[self.calibration.gripper.motor_id] = int(targets["gripper"])
+        try:
+            self.set_torque(True)
+            for motor_id in motor_targets:
+                self._write(motor_id, GOAL_SPEED, int(250).to_bytes(2, "little"))
+            self._sync_write_u16(GOAL_POSITION, motor_targets)
+            deadline = time.monotonic() + timeout
             result = self.state()
-            errors = [abs(float(joint["position_degrees"]) - float(target)) for joint, target in zip(result["joints"], joints_degrees, strict=True)]
-            if max(errors, default=0.0) <= 2.0:
-                break
-            time.sleep(0.05)
+            while time.monotonic() < deadline:
+                result = self.state()
+                errors = [abs(float(joint["position_degrees"]) - float(target)) for joint, target in zip(result["joints"], joints_degrees, strict=True)]
+                if max(errors, default=0.0) <= 2.0:
+                    break
+                time.sleep(0.05)
+        except Exception:
+            try:
+                self.emergency_stop()
+            except Exception:
+                pass
+            raise
         result["targets_degrees"] = [float(value) for value in joints_degrees]
         result["max_error_degrees"] = round(max(abs(float(joint["position_degrees"]) - float(target)) for joint, target in zip(result["joints"], joints_degrees, strict=True)), 4)
+        result["torque_enabled"] = True
+        result["goal_speed_raw"] = 250
         return result
 
     def benchmark(self, *, seed: int, cases: int = 3, excursion_degrees: float = 3.0) -> dict[str, object]:
@@ -239,13 +283,15 @@ class SO101HardwareDriver:
         try:
             for index in range(cases):
                 target = [value + rng.uniform(-excursion_degrees, excursion_degrees) for value in home]
-                result = self.move(target, 0.0, max_delta_degrees=5.0)
+                result = self.move(target, None, max_delta_degrees=5.0)
                 error = float(result["max_error_degrees"])
                 score = 100.0 * max(0.0, 1.0 - error / 5.0)
                 results.append({"case": index + 1, "target_degrees": target, "measured": result["joints"], "max_error_degrees": error, "score": round(score, 2)})
-        finally:
+            self.move(home, None, max_delta_degrees=5.0)
+        except Exception:
             try:
-                self.move(home, 0.0, max_delta_degrees=5.0)
-            finally:
-                self.set_torque(False)
-        return {"ok": all(float(item["max_error_degrees"]) <= 2.0 for item in results), "benchmark": "so101-physical-motion-v1", "driver": self.name, "seed": seed, "score": round(sum(float(item["score"]) for item in results) / len(results), 2), "cases": results}
+                self.emergency_stop()
+            except Exception:
+                pass
+            raise
+        return {"ok": all(float(item["max_error_degrees"]) <= 2.0 for item in results), "benchmark": "so101-physical-motion-v1", "driver": self.name, "seed": seed, "score": round(sum(float(item["score"]) for item in results) / len(results), 2), "torque_enabled": True, "instruction": "The arm is holding its return pose. Run 'jolly hardware stop' only when the arm is supported.", "cases": results}

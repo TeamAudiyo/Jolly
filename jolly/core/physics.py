@@ -313,9 +313,10 @@ class JollyEngine:
                 p.resetJointState(self.robot_id, info.index, value, physicsClientId=self.client)
             if gripper is not None:
                 self._set_gripper_state(old_gripper + (float(gripper) - old_gripper) * blend)
-            self._sync_held_object()
-            p.performCollisionDetection(physicsClientId=self.client)
-            if self.collisions()["collision"]:
+            self._hold_current_pose()
+            p.stepSimulation(physicsClientId=self.client)
+            ignored_grasp = self._contacting_graspable() if gripper is not None and float(gripper) >= 0.75 else None
+            if self.collisions(ignored_grasp=ignored_grasp)["collision"]:
                 collision_detected = True
                 if not allow_collision:
                     break
@@ -427,18 +428,23 @@ class JollyEngine:
             return
         if self.gripper < 0.75 or self.held_object is not None:
             return
-        ee = self.end_effector_position()
-        candidates: list[tuple[float, str]] = []
-        for name, body in self.object_ids.items():
-            if not self.object_specs[name].get("graspable"):
+        name = self._contacting_graspable()
+        if name:
+            self.held_object = name
+            self._attach_grasp_constraint(name)
+
+    def _contacting_graspable(self) -> str | None:
+        p.performCollisionDetection(physicsClientId=self.client)
+        names_by_body = {body: name for name, body in self.object_ids.items()}
+        candidates: set[str] = set()
+        for contact in p.getContactPoints(bodyA=self.robot_id, physicsClientId=self.client):
+            name = names_by_body.get(int(contact[2]))
+            if not name or not self.object_specs[name].get("graspable"):
                 continue
-            position, _ = p.getBasePositionAndOrientation(body, physicsClientId=self.client)
-            candidates.append((math.dist(ee, position), name))
-        if candidates:
-            distance, name = min(candidates)
-            if distance <= 0.10:
-                self.held_object = name
-                self._attach_grasp_constraint(name)
+            link_name = self._link_name(int(contact[3])).lower()
+            if any(token in link_name for token in ("gripper", "finger", "jaw", "tool")):
+                candidates.add(name)
+        return sorted(candidates)[0] if len(candidates) == 1 else None
 
     def _sync_held_object(self) -> None:
         """Constraints advance held objects during simulation; no pose teleport is used."""
@@ -523,7 +529,7 @@ class JollyEngine:
             "orientation_euler_degrees": [round(math.degrees(value), 4) for value in p.getEulerFromQuaternion(quaternion)],
         }
 
-    def collisions(self) -> dict[str, object]:
+    def collisions(self, *, ignored_grasp: str | None = None) -> dict[str, object]:
         p.performCollisionDetection(physicsClientId=self.client)
         details: list[dict[str, object]] = []
         names_by_body = {body: name for name, body in self.object_ids.items()}
@@ -534,6 +540,10 @@ class JollyEngine:
             link_b = int(contact[4])
             if self.held_object and body_b == self.object_ids.get(self.held_object):
                 continue
+            if ignored_grasp and body_b == self.object_ids.get(ignored_grasp):
+                link_name = self._link_name(link_a).lower()
+                if any(token in link_name for token in ("gripper", "finger", "jaw", "tool")):
+                    continue
             if body_b == self.plane_id and link_a == -1:
                 continue
             if body_b == self.robot_id and abs(link_a - link_b) <= 1:
@@ -557,7 +567,7 @@ class JollyEngine:
                     position, _ = p.getBasePositionAndOrientation(held_body, physicsClientId=self.client)
                     size = self.object_specs[self.held_object].get("size", [0.0, 0.0, 0.0])
                     supported = position[2] >= float(size[2]) / 2.0 - 0.003
-                    if supported and self.end_effector_position()[2] >= 0.08:
+                    if supported and self.end_effector_position()[2] >= 0.06:
                         continue
                 details.append(
                     {
