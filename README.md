@@ -14,7 +14,18 @@ API key, or network connection is required at runtime.
 
 ## Install
 
-Create a virtual environment on Python 3.10 or later:
+Install the global command with npm. The installer finds Python 3.10 or later
+and creates a private Python runtime inside the npm package:
+
+```bash
+npm install -g jolly-cli
+jolly state --json
+```
+
+Set `JOLLY_PYTHON` when npm must use a specific Python executable. The npm
+installer uses only local package files plus normal Python package downloads.
+
+For Python development, create a virtual environment on Python 3.10 or later:
 
 ```bash
 python -m venv .venv

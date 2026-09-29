@@ -1,0 +1,39 @@
+{
+  "name": "jolly-cli",
+  "version": "0.1.0",
+  "description": "Local PyBullet robot-arm simulator for terminal users and LLM agents",
+  "license": "MIT OR Apache-2.0",
+  "author": "TeamAudiyo",
+  "type": "commonjs",
+  "bin": {
+    "jolly": "npm/bin/jolly.js"
+  },
+  "scripts": {
+    "postinstall": "node npm/install.js",
+    "test": "node npm/test-wrapper.js"
+  },
+  "files": [
+    "jolly/**/*.py",
+    "jolly/**/*.urdf",
+    "jolly/**/*.html",
+    "npm/**",
+    "skills/**",
+    "pyproject.toml",
+    "README.md",
+    "SKILL.md",
+    "LICENSE-MIT",
+    "LICENSE-APACHE",
+    "THIRD_PARTY_LICENSES.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "robotics",
+    "pybullet",
+    "physics",
+    "simulation",
+    "cli",
+    "llm"
+  ]
+}
