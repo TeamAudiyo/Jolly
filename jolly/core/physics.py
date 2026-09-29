@@ -80,7 +80,11 @@ class PhysicsEngine:
         self.object_specs: dict[str, dict[str, object]] = {}
         self.held_object: str | None = None
         self.gripper = 0.0
-        self._load_world()
+        try:
+            self._load_world()
+        except Exception:
+            p.disconnect(self.client)
+            raise
 
     def __enter__(self) -> "PhysicsEngine":
         return self
@@ -221,6 +225,7 @@ class PhysicsEngine:
                 )
         start = [p.getJointState(self.robot_id, info.index, physicsClientId=self.client)[0] for info in self.arm_joints]
         old_gripper = self.gripper
+        old_held_object = self.held_object
         old_objects = self._object_poses()
         steps = max(1, min(int(steps), 2400))
         collision_detected = False
@@ -250,6 +255,15 @@ class PhysicsEngine:
             self._update_grasp()
         self._hold_current_pose()
         self._step(8)
+        final_collisions = self.collisions()
+        if final_collisions["collision"] and not allow_collision:
+            for info, value in zip(self.arm_joints, start, strict=True):
+                p.resetJointState(self.robot_id, info.index, value, physicsClientId=self.client)
+            self._set_gripper_state(old_gripper)
+            self.held_object = old_held_object
+            self._restore_object_poses(old_objects)
+            self._hold_current_pose()
+            raise MotionError("Motion rolled back because settling created a collision.")
         return self.state()
 
     def reach(
@@ -403,6 +417,21 @@ class PhysicsEngine:
                     "normal_force": round(float(contact[9]), 6),
                 }
             )
+        if self.held_object and self.held_object in self.object_ids:
+            held_body = self.object_ids[self.held_object]
+            for contact in p.getContactPoints(bodyA=held_body, physicsClientId=self.client):
+                body_b = int(contact[2])
+                if body_b in (self.robot_id, held_body):
+                    continue
+                details.append(
+                    {
+                        "type": "held_object_environment",
+                        "robot_link": self.model.end_effector_link,
+                        "other": names_by_body.get(body_b, "floor"),
+                        "distance": round(float(contact[8]), 6),
+                        "normal_force": round(float(contact[9]), 6),
+                    }
+                )
         return {"collision": bool(details), "count": len(details), "contacts": details}
 
     def _link_name(self, index: int) -> str:

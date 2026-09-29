@@ -54,3 +54,50 @@ def test_cli_benchmark_passes(tmp_path, monkeypatch) -> None:
     data = json.loads(invoke(runner, ["benchmark", "--json"]).output)
     assert data["ok"] is True
     assert data["score"] == 100.0
+
+
+def test_cli_motion_error_is_json(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("JOLLY_STATE_DIR", str(tmp_path))
+    runner = CliRunner()
+    invoke(runner, ["reset", "--json"])
+    result = runner.invoke(main, ["move", "--joints", "999,0,0,0,0,0", "--json"])
+    assert result.exit_code == 2
+    data = json.loads(result.output)
+    assert data["ok"] is False
+    assert data["error"]["type"] == "MotionError"
+
+
+def test_cli_reports_corrupt_state_cleanly(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("JOLLY_STATE_DIR", str(tmp_path))
+    (tmp_path / "state.json").write_text("not-json", encoding="utf-8")
+    result = CliRunner().invoke(main, ["state", "--json"])
+    assert result.exit_code == 2
+    data = json.loads(result.output)
+    assert data["ok"] is False
+    assert data["error"]["type"] == "ConfigurationError"
+
+
+def test_challenge_wrong_scene_is_json_error(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("JOLLY_STATE_DIR", str(tmp_path))
+    runner = CliRunner()
+    invoke(runner, ["reset", "--scene", "empty", "--json"])
+    result = runner.invoke(main, ["challenge", "status", "--challenge", "sort-red", "--json"])
+    assert result.exit_code == 2
+    data = json.loads(result.output)
+    assert data["error"]["type"] == "ConfigurationError"
+
+
+def test_render_preserves_active_challenge(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("JOLLY_STATE_DIR", str(tmp_path))
+    runner = CliRunner()
+    invoke(runner, ["challenge", "start", "sort-red", "--json"])
+    invoke(runner, ["render", "--json"])
+    status = json.loads(invoke(runner, ["challenge", "status", "--json"]).output)
+    assert status["challenge"]["id"] == "sort-red"
+    assert status["metrics"]["commands"] == 0
+
+
+def test_public_web_bind_requires_explicit_flag() -> None:
+    result = CliRunner().invoke(main, ["serve", "--host", "0.0.0.0"])
+    assert result.exit_code != 0
+    assert "--unsafe-public" in result.output

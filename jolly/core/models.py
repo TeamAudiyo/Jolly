@@ -80,7 +80,7 @@ def get_model(model_id: str) -> RobotModel:
 
 
 def model_path(model: RobotModel) -> Path:
-    return Path(str(files("jolly").joinpath("assets", model.urdf)))
+    return Path(str(files("jolly.assets").joinpath(model.urdf)))
 
 
 def list_models() -> list[dict[str, object]]:

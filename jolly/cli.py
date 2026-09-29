@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
@@ -58,11 +57,17 @@ def current_engine(*, model: str | None = None, scene: str | None = None, gui: b
             yield engine
 
 
-def persist(engine: PhysicsEngine, *, extra: dict[str, object] | None = None) -> dict[str, object]:
+def persist(
+    engine: PhysicsEngine,
+    *,
+    extra: dict[str, object] | None = None,
+    count_challenge_command: bool = False,
+) -> dict[str, object]:
     state = engine.state()
     previous = load_state() or {}
     if "active_challenge" in previous:
         state["active_challenge"] = previous["active_challenge"]
+        state["challenge_commands"] = int(previous.get("challenge_commands", 0)) + int(count_challenge_command)
     if extra:
         state.update(extra)
     save_state(state)
@@ -74,11 +79,15 @@ def json_error(exc: Exception) -> str:
 
 
 class SafeGroup(click.Group):
+    def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
+        ctx.meta["json_requested"] = "--json" in args or os.environ.get("JOLLY_JSON") == "1"
+        return super().parse_args(ctx, args)
+
     def invoke(self, ctx: click.Context) -> Any:
         try:
             return super().invoke(ctx)
         except JollyError as exc:
-            if "--json" in sys.argv or os.environ.get("JOLLY_JSON") == "1":
+            if ctx.meta.get("json_requested"):
                 click.echo(json_error(exc))
                 ctx.exit(2)
             raise click.ClickException(str(exc)) from exc
@@ -128,7 +137,11 @@ def move_command(joints: list[float], gripper: float | None, steps: int, allow_c
     """Move to exact joint angles."""
     with current_engine() as engine:
         data = engine.move_joints(joints, gripper=gripper, steps=steps, allow_collision=allow_collision)
-        data = persist(engine, extra={"ik": data.get("ik")} if data.get("ik") else None)
+        data = persist(
+            engine,
+            extra={"ik": data.get("ik")} if data.get("ik") else None,
+            count_challenge_command=True,
+        )
     emit(data, json_output=json_output, message=f"Moved {len(joints)} joints. Tool={data['end_effector']['position']}")
 
 
@@ -145,7 +158,7 @@ def reach_command(x: float, y: float, z: float, gripper: float | None, steps: in
     with current_engine() as engine:
         data = engine.reach(x, y, z, gripper=gripper, steps=steps, allow_collision=allow_collision)
         ik = data["ik"]
-        data = persist(engine, extra={"ik": ik})
+        data = persist(engine, extra={"ik": ik}, count_challenge_command=True)
     emit(data, json_output=json_output, message=f"Reached {data['end_effector']['position']} with {data['ik']['error_meters']:.4f} m error.")
 
 
@@ -178,7 +191,7 @@ def render_command(json_output: bool) -> None:
     with current_engine() as engine:
         state = engine.state()
         points = engine.joint_positions()
-        save_state(state)
+        state = persist(engine)
     if json_output:
         emit({"ok": True, "state": state, "skeleton_points": points}, json_output=True)
         return
@@ -241,6 +254,7 @@ def challenge_start_command(challenge_id: str, model: str, json_output: bool) ->
     with current_engine(model=model, scene=challenge.scene) as engine:
         state = engine.reset()
         state["active_challenge"] = challenge_id
+        state["challenge_commands"] = 0
         save_state(state)
     emit({"ok": True, "challenge": vars(challenge), "state": state}, json_output=json_output, message=f"Started '{challenge.name}' in scene '{challenge.scene}'.")
 
@@ -254,7 +268,7 @@ def challenge_status_command(challenge_id: str | None, json_output: bool) -> Non
     if not selected:
         raise click.ClickException("No active challenge. Run 'jolly challenge start ID'.")
     with current_engine() as engine:
-        state = engine.state()
+        state = persist(engine)
     data = evaluate(str(selected), state)
     emit(data, json_output=json_output, message=f"{data['challenge']['name']}: {'PASS' if data['success'] else 'IN PROGRESS'} · score={data['score']}")
 
@@ -280,8 +294,11 @@ def viewer_command(model: str | None, scene: str | None) -> None:
 @main.command("serve")
 @click.option("host", "--host", default="127.0.0.1", show_default=True)
 @click.option("port", "--port", type=click.IntRange(1, 65535), default=8765, show_default=True)
-def serve_command(host: str, port: int) -> None:
+@click.option("unsafe_public", "--unsafe-public", is_flag=True, help="Allow a non-loopback bind without authentication.")
+def serve_command(host: str, port: int, unsafe_public: bool) -> None:
     """Start the optional local web viewer and JSON API."""
+    if host not in {"127.0.0.1", "localhost", "::1"} and not unsafe_public:
+        raise click.ClickException("Non-loopback web control requires explicit --unsafe-public.")
     try:
         import uvicorn
     except ImportError as exc:

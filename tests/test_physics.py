@@ -46,3 +46,13 @@ def test_grasp_helper_tracks_nearby_object() -> None:
         state = engine.reach(0.30, -0.16, 0.10, gripper=1.0)
         assert state["held_object"] == "red_block"
         assert state["collisions"]["collision"] is False
+
+
+def test_carried_object_floor_collision_rolls_back() -> None:
+    with PhysicsEngine(scene="blocks") as engine:
+        engine.reach(0.30, -0.16, 0.10, gripper=0.0)
+        grasped = engine.reach(0.30, -0.16, 0.10, gripper=1.0)
+        safe_position = grasped["end_effector"]["position"]
+        with pytest.raises(MotionError, match="collision"):
+            engine.reach(0.30, -0.16, 0.04, gripper=1.0)
+        assert engine.state()["end_effector"]["position"] == pytest.approx(safe_position, abs=1e-4)

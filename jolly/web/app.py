@@ -39,7 +39,14 @@ class ResetRequest(BaseModel):
 app = FastAPI(title="Jolly local simulator", version=__version__, docs_url="/api/docs")
 
 
-def _run(operation: Any, *, model: str | None = None, scene: str | None = None) -> dict[str, object]:
+def _run(
+    operation: Any,
+    *,
+    model: str | None = None,
+    scene: str | None = None,
+    preserve_metadata: bool = True,
+    count_challenge_command: bool = False,
+) -> dict[str, object]:
     with state_lock():
         saved = load_state()
         selected_model = model or (str(saved["model"]["id"]) if saved else "jolly6")
@@ -51,6 +58,9 @@ def _run(operation: Any, *, model: str | None = None, scene: str | None = None) 
                 state = operation(engine)
                 if not isinstance(state, dict):
                     state = engine.state()
+                if preserve_metadata and saved and "active_challenge" in saved:
+                    state["active_challenge"] = saved["active_challenge"]
+                    state["challenge_commands"] = int(saved.get("challenge_commands", 0)) + int(count_challenge_command)
                 save_state(state)
                 state["skeleton_points"] = engine.joint_positions()
                 return state
@@ -81,7 +91,8 @@ def move(request: MoveRequest) -> dict[str, object]:
             gripper=request.gripper,
             steps=request.steps,
             allow_collision=request.allow_collision,
-        )
+        ),
+        count_challenge_command=True,
     )
 
 
@@ -95,10 +106,16 @@ def reach(request: ReachRequest) -> dict[str, object]:
             gripper=request.gripper,
             steps=request.steps,
             allow_collision=request.allow_collision,
-        )
+        ),
+        count_challenge_command=True,
     )
 
 
 @app.post("/api/reset")
 def reset(request: ResetRequest) -> dict[str, object]:
-    return _run(lambda engine: engine.reset(), model=request.model, scene=request.scene)
+    return _run(
+        lambda engine: engine.reset(),
+        model=request.model,
+        scene=request.scene,
+        preserve_metadata=False,
+    )

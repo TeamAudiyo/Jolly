@@ -66,6 +66,11 @@ def list_challenges() -> list[dict[str, object]]:
 
 def evaluate(challenge_id: str, state: dict[str, object]) -> dict[str, object]:
     challenge = get_challenge(challenge_id)
+    if state.get("scene") != challenge.scene:
+        raise ConfigurationError(
+            f"Challenge '{challenge_id}' requires scene '{challenge.scene}', not '{state.get('scene')}'. "
+            f"Run 'jolly challenge start {challenge_id}'."
+        )
     ee = state["end_effector"]["position"]
     objects = {item["name"]: item for item in state.get("objects", [])}
     collision = bool(state["collisions"]["collision"])
@@ -90,6 +95,11 @@ def evaluate(challenge_id: str, state: dict[str, object]) -> dict[str, object]:
         error = math.dist(ee, goal)
         success = error <= 0.07 and not collision
         metrics = {"goal_error_meters": round(error, 6), "collision_free": not collision}
+    command_count = int(state.get("challenge_commands", 0))
+    within_budget = command_count <= challenge.max_commands
+    success = success and within_budget
+    metrics["commands"] = command_count
+    metrics["within_command_budget"] = within_budget
     return {
         "ok": True,
         "challenge": vars(challenge),

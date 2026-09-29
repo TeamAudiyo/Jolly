@@ -8,6 +8,8 @@ from typing import Iterator
 
 from platformdirs import user_state_path
 
+from jolly.core.errors import ConfigurationError
+
 
 def state_dir() -> Path:
     override = os.environ.get("JOLLY_STATE_DIR")
@@ -46,7 +48,13 @@ def load_state() -> dict[str, object] | None:
     path = state_file()
     if not path.exists():
         return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ConfigurationError(f"State file is unreadable: {path}. Run 'jolly reset' to replace it.") from exc
+    if not isinstance(data, dict):
+        raise ConfigurationError(f"State file has an invalid root value: {path}. Run 'jolly reset' to replace it.")
+    return data
 
 
 def save_state(state: dict[str, object]) -> None:
