@@ -8,7 +8,7 @@ optional local web viewer.
 ## Start here
 
 ```bash
-npm install -g jolly-cli
+python -m pip install jolly-cli
 jolly reset --model jolly6 --scene blocks --json
 jolly state --json
 ```

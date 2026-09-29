@@ -1,20 +1,17 @@
 # Installation
 
-## npm global command
+## PyPI command
 
-Install Node.js 18 or later and Python 3.10 or later. Then run:
+Install Python 3.10 or later. Then run:
 
 ```bash
-npm install -g jolly-cli
+python -m pip install jolly-cli
 jolly --version
 jolly state --json
 ```
 
-The npm package installs a private Python runtime for PyBullet. The first
-command performs setup when the npm client skips install scripts. This setup can
-take several minutes when PyBullet needs a local C++ build.
-
-Set `JOLLY_PYTHON` to select a specific Python executable.
+PyBullet can require a local C++ build when PyPI has no wheel for the current
+Python and operating-system combination.
 
 ## Python development install
 
