@@ -12,6 +12,20 @@ The package also accepts scenes, challenges, an engine benchmark, a native
 PyBullet viewer, and an optional local web viewer. No cloud service, MCP server,
 API key, or network connection is required at runtime.
 
+## See Jolly in action
+
+### Local web simulator
+
+![Jolly local web simulator demo](docs/assets/jolly-web-demo.gif)
+
+[Watch the WebM recording](docs/assets/jolly-web-demo.webm)
+
+### Terminal-native control
+
+![Jolly terminal CLI demo](docs/assets/jolly-terminal-demo.gif)
+
+[Watch the MP4 recording](docs/assets/jolly-terminal-demo.mp4)
+
 ## Install
 
 Install the command from PyPI with Python 3.10 or later:
