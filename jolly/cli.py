@@ -13,7 +13,14 @@ from rich.console import Console
 from rich.table import Table
 
 from jolly import __version__
-from jolly.benchmark import BENCHMARK_CHALLENGE, BENCHMARK_ID, CONTROL_WORKFLOW, score_operator_benchmark
+from jolly.benchmark import (
+    BENCHMARK_CHALLENGE,
+    BENCHMARK_ID,
+    BENCHMARK_METADATA_KEYS,
+    CONTROL_WORKFLOW,
+    benchmark_control_history,
+    score_operator_benchmark,
+)
 from jolly.challenges import evaluate, get_challenge, list_challenges
 from jolly.driver import JollyDriver
 from jolly.engine import JollyEngine
@@ -77,13 +84,7 @@ def persist(
     state = engine.state()
     previous = load_state() or {}
     if "active_challenge" in previous:
-        for key in (
-            "active_challenge",
-            "challenge_seed",
-            "challenge_instance",
-            "active_benchmark",
-            "benchmark_controls",
-        ):
+        for key in BENCHMARK_METADATA_KEYS:
             if key in previous:
                 state[key] = previous[key]
         state["challenge_commands"] = int(previous.get("challenge_commands", 0)) + int(count_challenge_command)
@@ -101,23 +102,15 @@ def benchmark_control_extra(
     result: dict[str, object],
 ) -> dict[str, object] | None:
     """Append an explicit operator control when an operator benchmark is active."""
-    if previous.get("active_benchmark") != BENCHMARK_ID:
-        return None
-    existing = previous.get("benchmark_controls", [])
-    controls = list(existing) if isinstance(existing, list) else []
-    controls.append(
-        {
-            "index": len(controls) + 1,
-            "command": command,
-            "requested": requested,
-            "measured": {
-                "tool_position": result["end_effector"]["position"],
-                "gripper": result["gripper"],
-                "held_object": result["held_object"],
-                "collision": result["collisions"]["collision"],
-            },
-        }
+    controls = benchmark_control_history(
+        previous,
+        source="cli",
+        command=command,
+        requested=requested,
+        result=result,
     )
+    if controls is None:
+        return None
     return {"benchmark_controls": controls}
 
 
@@ -169,6 +162,14 @@ def models_command(json_output: bool) -> None:
 @click.option("json_output", "--json", is_flag=True, help="Return structured JSON.")
 def state_command(model: str | None, json_output: bool) -> None:
     """Return joints, tool pose, objects, and collisions."""
+    saved = load_state()
+    if (
+        model is not None
+        and saved
+        and saved.get("active_benchmark") == BENCHMARK_ID
+        and saved.get("model", {}).get("id") != model
+    ):
+        raise ConfigurationError("Cannot change the model while an operator benchmark is active. Run 'jolly reset' first.")
     with current_engine(model=model) as engine:
         data = persist(engine)
     emit(data, json_output=json_output, message=f"{data['model']['name']}: tool={data['end_effector']['position']} collision={data['collisions']['collision']}")
@@ -188,7 +189,12 @@ def move_command(joints: list[float], gripper: float | None, steps: int, allow_c
         benchmark_extra = benchmark_control_extra(
             previous,
             command="move",
-            requested={"joints_degrees": joints, "gripper": gripper, "steps": steps},
+            requested={
+                "joints_degrees": joints,
+                "gripper": gripper,
+                "steps": steps,
+                "allow_collision": allow_collision,
+            },
             result=data,
         )
         data = persist(
@@ -216,7 +222,14 @@ def reach_command(x: float, y: float, z: float, gripper: float | None, steps: in
         benchmark_extra = benchmark_control_extra(
             previous,
             command="reach",
-            requested={"x": x, "y": y, "z": z, "gripper": gripper, "steps": steps},
+            requested={
+                "x": x,
+                "y": y,
+                "z": z,
+                "gripper": gripper,
+                "steps": steps,
+                "allow_collision": allow_collision,
+            },
             result=data,
         ) or {}
         benchmark_extra["ik"] = ik

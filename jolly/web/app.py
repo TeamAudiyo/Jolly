@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from jolly import __version__
+from jolly.benchmark import BENCHMARK_METADATA_KEYS, benchmark_control_history
 from jolly.core.errors import JollyError
 from jolly.core.models import list_models
 from jolly.engine import JollyEngine
@@ -48,6 +49,7 @@ def _run(
     scene: str | None = None,
     preserve_metadata: bool = True,
     count_challenge_command: bool = False,
+    benchmark_control: tuple[str, dict[str, object]] | None = None,
 ) -> dict[str, object]:
     with state_lock():
         try:
@@ -68,8 +70,21 @@ def _run(
                 if not isinstance(state, dict):
                     state = engine.state()
                 if preserve_metadata and saved and "active_challenge" in saved:
-                    state["active_challenge"] = saved["active_challenge"]
+                    for key in BENCHMARK_METADATA_KEYS:
+                        if key in saved:
+                            state[key] = saved[key]
                     state["challenge_commands"] = int(saved.get("challenge_commands", 0)) + int(count_challenge_command)
+                    if benchmark_control:
+                        command, requested = benchmark_control
+                        controls = benchmark_control_history(
+                            saved,
+                            source="web-api",
+                            command=command,
+                            requested=requested,
+                            result=state,
+                        )
+                        if controls is not None:
+                            state["benchmark_controls"] = controls
                 save_state(state)
                 state["skeleton_points"] = engine.joint_positions()
                 return state
@@ -154,6 +169,15 @@ def move(request: MoveRequest) -> dict[str, object]:
             allow_collision=request.allow_collision,
         ),
         count_challenge_command=True,
+        benchmark_control=(
+            "move",
+            {
+                "joints_degrees": request.joints,
+                "gripper": request.gripper,
+                "steps": request.steps,
+                "allow_collision": request.allow_collision,
+            },
+        ),
     )
 
 
@@ -169,6 +193,17 @@ def reach(request: ReachRequest) -> dict[str, object]:
             allow_collision=request.allow_collision,
         ),
         count_challenge_command=True,
+        benchmark_control=(
+            "reach",
+            {
+                "x": request.x,
+                "y": request.y,
+                "z": request.z,
+                "gripper": request.gripper,
+                "steps": request.steps,
+                "allow_collision": request.allow_collision,
+            },
+        ),
     )
 
 

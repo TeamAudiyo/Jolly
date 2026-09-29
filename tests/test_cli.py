@@ -118,6 +118,17 @@ def test_cli_benchmark_requires_explicit_pick_and_place_controls(tmp_path, monke
     assert measured["measurements"]["below_rim"] is True
 
 
+def test_state_cannot_swap_models_during_operator_benchmark(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("JOLLY_STATE_DIR", str(tmp_path))
+    runner = CliRunner()
+    invoke(runner, ["benchmark", "start", "--seed", "1", "--model", "so101", "--json"])
+    result = runner.invoke(main, ["state", "--model", "jolly6", "--json"])
+    assert result.exit_code == 2
+    data = json.loads(result.output)
+    assert data["error"]["type"] == "ConfigurationError"
+    assert "operator benchmark is active" in data["error"]["message"]
+
+
 def test_cli_motion_error_is_json(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("JOLLY_STATE_DIR", str(tmp_path))
     runner = CliRunner()
