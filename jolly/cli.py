@@ -13,7 +13,7 @@ from rich.table import Table
 from jolly import __version__
 from jolly.benchmark import run_benchmark
 from jolly.challenges import evaluate, get_challenge, list_challenges
-from jolly.core.errors import JollyError
+from jolly.core.errors import ConfigurationError, JollyError
 from jolly.core.models import get_model, list_models
 from jolly.core.physics import PhysicsEngine
 from jolly.core.scenes import get_scene, list_scenes
@@ -266,7 +266,7 @@ def challenge_status_command(challenge_id: str | None, json_output: bool) -> Non
     saved = load_state() or {}
     selected = challenge_id or saved.get("active_challenge")
     if not selected:
-        raise click.ClickException("No active challenge. Run 'jolly challenge start ID'.")
+        raise ConfigurationError("No active challenge. Run 'jolly challenge start ID'.")
     with current_engine() as engine:
         state = persist(engine)
     data = evaluate(str(selected), state)

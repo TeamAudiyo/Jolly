@@ -87,6 +87,14 @@ def test_challenge_wrong_scene_is_json_error(tmp_path, monkeypatch) -> None:
     assert data["error"]["type"] == "ConfigurationError"
 
 
+def test_missing_active_challenge_is_json_error(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("JOLLY_STATE_DIR", str(tmp_path))
+    result = CliRunner().invoke(main, ["challenge", "status", "--json"])
+    assert result.exit_code == 2
+    data = json.loads(result.output)
+    assert data["error"]["type"] == "ConfigurationError"
+
+
 def test_render_preserves_active_challenge(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("JOLLY_STATE_DIR", str(tmp_path))
     runner = CliRunner()
