@@ -1,6 +1,6 @@
 # Web Viewer
 
-![Jolly 0.4.0 web viewer executing a Cartesian reach in the insertion scene](../assets/jolly-web-demo.gif)
+![Jolly web viewer executing a Cartesian reach in the insertion scene](../assets/jolly-web-demo.gif)
 
 [Watch the full WebM recording](../assets/jolly-web-demo.webm) or
 [open the full-resolution still](../assets/jolly-so101-viewer.png).

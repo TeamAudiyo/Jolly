@@ -3,12 +3,12 @@
 Jolly provides two separate robot-control backends for terminal users and LLM
 agents:
 
-- `JollyEngine` executes measured contact tasks with the official SO-101 model
-  in PyBullet.
+- `JollyEngine` executes explicit operator controls with the official SO-101
+  model in PyBullet, then measures the final physical state.
 - `SO101HardwareDriver` sends the real STS3215 serial protocol to a physical
   SO-101 and reads measured motor positions.
 
-The two backends never combine their scores.
+The two backends never combine their results.
 
 Jolly includes two offline robot profiles:
 
@@ -19,11 +19,11 @@ The package also accepts scenes, challenges, an engine benchmark, a native
 PyBullet viewer, and an optional local web viewer. No cloud service, MCP server,
 API key, or network connection is required at runtime.
 
-## See Jolly 0.4.0 in action
+## See Jolly 0.5.0 in action
 
 ### Interactive SO-101 simulator
 
-![Jolly 0.4.0 web viewer executing a Cartesian reach in the insertion scene](docs/assets/jolly-web-demo.gif)
+![Jolly web viewer executing a Cartesian reach in the insertion scene](docs/assets/jolly-web-demo.gif)
 
 [Watch the full WebM recording](docs/assets/jolly-web-demo.webm) ·
 [Open the full-resolution still](docs/assets/jolly-so101-viewer.png)
@@ -32,15 +32,17 @@ The recording uses the official SO-101 CAD meshes in a real PyBullet world. It
 executes a Cartesian reach in the insertion scene. The viewport is not a
 diagram or a hand-drawn robot substitute.
 
-### Randomized terminal benchmark and hardware commands
+### Operator-controlled randomized pick-and-place
 
-![Jolly 0.4.0 terminal demo showing different scores for randomized seeds](docs/assets/jolly-terminal-randomized-v040.gif)
+![Jolly 0.5.0 terminal demo showing explicit pick-and-place controls](docs/assets/jolly-terminal-pick-place-v050.gif)
 
-[Watch the MP4 recording](docs/assets/jolly-terminal-randomized-v040.mp4)
+[Watch the MP4 recording](docs/assets/jolly-terminal-pick-place-v050.mp4)
 
-The terminal recording runs one benchmark case under seeds `1` and `3`. Each
-case includes reach, obstacle, and drop-in-hole tasks. The aggregate scores
-differ, and the recording then opens the separate physical SO-101 command help.
+The terminal recording shows every control: move above the peg, move down,
+close the gripper, lift, move sideways, lower, and release. `benchmark score`
+does not move the robot and does not generate a numeric score. It reports PASS
+only from the final measured peg pose, release state, collision state, and
+command budget.
 
 ## Install
 
@@ -78,7 +80,9 @@ jolly move --joints "0,-20,40,-20,0" --gripper 0.0 --json
 jolly reach --x 0.30 --y 0.10 --z 0.18 --gripper 0.0 --json
 jolly render
 jolly challenge list --json
-jolly benchmark --seed 42017 --cases 3 --model so101 --json
+jolly benchmark start --seed 42017 --model so101 --json
+# Issue explicit jolly reach controls using the generated peg and hole coordinates.
+jolly benchmark score --json
 ```
 
 Start the optional local web viewer:
@@ -119,7 +123,7 @@ Important commands:
 | `jolly reset` | Select a model and scene, then home the robot. |
 | `jolly scene list/load` | Discover and load deterministic scenes. |
 | `jolly challenge list/start/status` | Run seeded randomized manipulation challenges. |
-| `jolly benchmark [--seed N] [--cases N]` | Execute randomized reach, obstacle, and drop-in-hole contact tasks. |
+| `jolly benchmark start/score` | Generate a randomized pick-and-place task, accept explicit controls, then measure PASS or FAIL. |
 | `jolly hardware state/move/benchmark/stop` | Control and measure a physical SO-101 over its serial bus. |
 
 Jolly rejects joint-limit violations and unsafe workspace targets. By default,
@@ -172,7 +176,7 @@ AI, or an external robotics benchmark driver.
 PyBullet is the low-level open-source physics backend. It performs rigid-body
 simulation, FK, IK, contact generation, and scene settling. Jolly uses
 deterministic state restoration across short CLI processes.
-The grasp helper attaches a nearby graspable object while the gripper is closed.
+The grasp helper attaches one contacted graspable object while the gripper is closed.
 This helper makes terminal pick-and-place repeatable. It is not a soft-contact or
 motor-current model.
 
@@ -184,13 +188,17 @@ The result includes the seed and full instance so results stay auditable. Omit
 
 ```bash
 jolly challenge start sort-red --seed 42017 --json
-jolly benchmark --seed 42017 --cases 5 --json
+jolly benchmark start --seed 42017 --model so101 --json
+# Read the generated instance, then issue each reach control yourself.
+jolly benchmark score --json
 ```
 
-The benchmark physically executes randomized reach, obstacle avoidance, and
-drop-in-hole tasks. Its score comes from measured reach error, collisions, grasp
-state, physical release, and final peg pose. A generated health check does not
-add points. Different seeds can produce different scores.
+Benchmark start generates the randomized peg and hole but executes no motion.
+Only explicit `jolly reach` or `jolly move` commands can change the attempt.
+Benchmark score executes no motion and returns no numeric score. PASS requires
+the released peg to settle inside the generated hole without collision and
+within the command budget. The JSON result includes every requested control and
+its measured tool, gripper, grasp, and collision state.
 
 ## Physical SO-101 hardware
 
@@ -224,9 +232,9 @@ read motor feedback. The driver disables torque after communication failures.
 After successful movement it keeps torque enabled so the arm does not fall.
 Support the arm before running `jolly hardware stop`.
 
-The physical benchmark scores measured joint-position error only. The physics
-benchmark scores contact tasks only. Jolly never presents physics output as a
-physical-hardware result.
+The physical benchmark scores measured joint-position error only. The PyBullet
+operator benchmark returns a measured PASS or FAIL without a numeric score.
+Jolly never presents physics output as a physical-hardware result.
 
 The bundled SO-101 model is the official Apache-2.0 new-calibration URDF from
 The Robot Studio. Jolly includes the 13 referenced STL meshes from pinned commit

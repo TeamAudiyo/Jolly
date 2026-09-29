@@ -26,7 +26,7 @@ the starting pose. Torque stays enabled to hold that pose. Support the arm
 before `jolly hardware stop`. Communication failures trigger a best-effort
 torque disable. Clear the workspace and keep an emergency power cutoff nearby.
 
-Physical hardware scores and PyBullet contact-task scores are separate. Jolly
+Physical hardware scores and PyBullet operator PASS or FAIL results are separate. Jolly
 never labels a physics result as a physical-hardware result.
 
 Protocol and hardware references:

@@ -23,12 +23,17 @@ jolly scene load blocks --json
 jolly challenge list --json
 jolly challenge start sort-red --model jolly6 [--seed N] --json
 jolly challenge status --json
-jolly benchmark [--seed N] [--cases 3] [--model so101] --json
+jolly benchmark start [--seed N] [--model so101] --json
+# Issue explicit jolly reach or jolly move controls.
+jolly benchmark score --json
 ```
 
 Challenge starts use a fresh random seed by default. The JSON response contains
 the seed and generated instance. Supply `--seed N` to replay the exact case.
-The benchmark executes randomized reach, obstacle, and drop-in-hole tasks through `JollyDriver`.
+Benchmark start generates a randomized drop-in-hole task through `JollyDriver`
+without moving the robot. Benchmark score measures only the state produced by
+the intervening explicit controls and returns PASS or FAIL without a numeric
+score.
 
 ## Physical SO-101
 
@@ -40,7 +45,8 @@ jolly hardware benchmark --port /dev/ttyACM0 --calibration calibration.json --se
 jolly hardware stop --port /dev/ttyACM0 --calibration calibration.json
 ```
 
-Physics and physical-hardware results use separate benchmark names and scores.
+PyBullet and physical-hardware results use separate benchmark names. The
+PyBullet operator benchmark has no numeric score.
 
 ## Viewers
 

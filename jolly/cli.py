@@ -13,7 +13,7 @@ from rich.console import Console
 from rich.table import Table
 
 from jolly import __version__
-from jolly.benchmark import run_benchmark
+from jolly.benchmark import BENCHMARK_CHALLENGE, BENCHMARK_ID, CONTROL_WORKFLOW, score_operator_benchmark
 from jolly.challenges import evaluate, get_challenge, list_challenges
 from jolly.driver import JollyDriver
 from jolly.engine import JollyEngine
@@ -77,7 +77,13 @@ def persist(
     state = engine.state()
     previous = load_state() or {}
     if "active_challenge" in previous:
-        for key in ("active_challenge", "challenge_seed", "challenge_instance"):
+        for key in (
+            "active_challenge",
+            "challenge_seed",
+            "challenge_instance",
+            "active_benchmark",
+            "benchmark_controls",
+        ):
             if key in previous:
                 state[key] = previous[key]
         state["challenge_commands"] = int(previous.get("challenge_commands", 0)) + int(count_challenge_command)
@@ -85,6 +91,34 @@ def persist(
         state.update(extra)
     save_state(state)
     return state
+
+
+def benchmark_control_extra(
+    previous: dict[str, object],
+    *,
+    command: str,
+    requested: dict[str, object],
+    result: dict[str, object],
+) -> dict[str, object] | None:
+    """Append an explicit operator control when an operator benchmark is active."""
+    if previous.get("active_benchmark") != BENCHMARK_ID:
+        return None
+    existing = previous.get("benchmark_controls", [])
+    controls = list(existing) if isinstance(existing, list) else []
+    controls.append(
+        {
+            "index": len(controls) + 1,
+            "command": command,
+            "requested": requested,
+            "measured": {
+                "tool_position": result["end_effector"]["position"],
+                "gripper": result["gripper"],
+                "held_object": result["held_object"],
+                "collision": result["collisions"]["collision"],
+            },
+        }
+    )
+    return {"benchmark_controls": controls}
 
 
 def json_error(exc: Exception) -> str:
@@ -150,9 +184,16 @@ def move_command(joints: list[float], gripper: float | None, steps: int, allow_c
     """Move to exact joint angles."""
     with current_engine() as engine:
         data = engine.move_joints(joints, gripper=gripper, steps=steps, allow_collision=allow_collision)
+        previous = load_state() or {}
+        benchmark_extra = benchmark_control_extra(
+            previous,
+            command="move",
+            requested={"joints_degrees": joints, "gripper": gripper, "steps": steps},
+            result=data,
+        )
         data = persist(
             engine,
-            extra={"ik": data.get("ik")} if data.get("ik") else None,
+            extra=benchmark_extra,
             count_challenge_command=True,
         )
     emit(data, json_output=json_output, message=f"Moved {len(joints)} joints. Tool={data['end_effector']['position']}")
@@ -171,8 +212,23 @@ def reach_command(x: float, y: float, z: float, gripper: float | None, steps: in
     with current_engine() as engine:
         data = engine.reach(x, y, z, gripper=gripper, steps=steps, allow_collision=allow_collision)
         ik = data["ik"]
-        data = persist(engine, extra={"ik": ik}, count_challenge_command=True)
-    emit(data, json_output=json_output, message=f"Reached {data['end_effector']['position']} with {data['ik']['error_meters']:.4f} m error.")
+        previous = load_state() or {}
+        benchmark_extra = benchmark_control_extra(
+            previous,
+            command="reach",
+            requested={"x": x, "y": y, "z": z, "gripper": gripper, "steps": steps},
+            result=data,
+        ) or {}
+        benchmark_extra["ik"] = ik
+        data = persist(engine, extra=benchmark_extra, count_challenge_command=True)
+    emit(
+        data,
+        json_output=json_output,
+        message=(
+            f"Reached {data['end_effector']['position']} with {data['ik']['error_meters']:.4f} m error; "
+            f"gripper={data['gripper']:.1f}, held={data['held_object'] or 'none'}."
+        ),
+    )
 
 
 @main.command("fk")
@@ -292,15 +348,67 @@ def challenge_status_command(challenge_id: str | None, json_output: bool) -> Non
     emit(data, json_output=json_output, message=f"{data['challenge']['name']}: {'PASS' if data['success'] else 'IN PROGRESS'} · score={data['score']}")
 
 
-@main.command("benchmark")
+@main.group("benchmark")
+def benchmark_group() -> None:
+    """Run an operator-controlled randomized pick-and-place benchmark."""
+
+
+@benchmark_group.command("start")
 @click.option("seed", "--seed", type=click.IntRange(0, 2**63 - 1))
-@click.option("cases", "--cases", type=click.IntRange(1, 25), default=3, show_default=True)
 @click.option("model", "--model", type=click.Choice(["so101", "jolly6"]), default="so101", show_default=True)
 @click.option("json_output", "--json", is_flag=True)
-def benchmark_command(seed: int | None, cases: int, model: str, json_output: bool) -> None:
-    """Execute randomized motion and contact tasks in PyBullet physics."""
-    data = run_benchmark(seed=seed, cases=cases, model=model)
-    emit(data, json_output=json_output, message=f"PyBullet contact-task score: {data['score']:.1f}/100 ({data['passed']}/{data['total']} tasks)")
+def benchmark_start_command(seed: int | None, model: str, json_output: bool) -> None:
+    """Generate a task without moving the robot."""
+    challenge = get_challenge(BENCHMARK_CHALLENGE)
+    driver = JollyDriver(seed)
+    instance = driver.challenge_instance(BENCHMARK_CHALLENGE)
+    with current_engine(model=model, scene=challenge.scene) as engine:
+        engine.reset()
+        state = engine.set_object_positions(instance["object_positions"])
+        state.update(
+            {
+                "active_challenge": BENCHMARK_CHALLENGE,
+                "active_benchmark": BENCHMARK_ID,
+                "benchmark_controls": [],
+                "challenge_commands": 0,
+                "challenge_seed": driver.seed,
+                "challenge_instance": instance,
+            }
+        )
+        save_state(state)
+    data = {
+        "ok": True,
+        "benchmark": BENCHMARK_ID,
+        "mode": "operator-controlled",
+        "seed": driver.seed,
+        "instance": instance,
+        "control_workflow": CONTROL_WORKFLOW,
+        "state": state,
+        "motion_executed": False,
+    }
+    emit(
+        data,
+        json_output=json_output,
+        message=(
+            f"Started operator pick-and-place seed {driver.seed}. "
+            f"Peg={instance['object_positions']['peg']}; hole={instance['target']}. No motion ran. "
+            "Inspect 'jolly state --json', issue explicit 'jolly reach' controls, then run 'jolly benchmark score'."
+        ),
+    )
+
+
+@benchmark_group.command("score")
+@click.option("json_output", "--json", is_flag=True)
+def benchmark_score_command(json_output: bool) -> None:
+    """Measure the final state without moving the robot."""
+    with current_engine() as engine:
+        state = persist(engine)
+    data = score_operator_benchmark(state)
+    emit(
+        data,
+        json_output=json_output,
+        message=f"Operator pick-and-place: {data['outcome']} after {data['control_count']} explicit controls. No numeric score was generated.",
+    )
 
 
 @main.group("hardware")

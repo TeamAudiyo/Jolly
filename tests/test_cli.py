@@ -62,14 +62,60 @@ def test_cli_lists_scenes_and_challenges(tmp_path, monkeypatch) -> None:
     assert len(challenges["challenges"]) >= 4
 
 
-def test_cli_benchmark_passes(tmp_path, monkeypatch) -> None:
+def test_cli_benchmark_requires_explicit_pick_and_place_controls(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("JOLLY_STATE_DIR", str(tmp_path))
     runner = CliRunner()
-    data = json.loads(invoke(runner, ["benchmark", "--seed", "1", "--cases", "1", "--json"]).output)
-    assert 0 < data["score"] < 100
-    assert data["score_basis"].startswith("PyBullet")
-    assert data["benchmark"] == "jolly-pybullet-contact-tasks-v4"
-    assert any(task["name"] == "randomized-drop-in-hole" for task in data["tasks"])
+    started = json.loads(invoke(runner, ["benchmark", "start", "--seed", "1", "--json"]).output)
+    assert started["benchmark"] == "jolly-operator-pick-place-v5"
+    assert started["motion_executed"] is False
+    assert started["state"]["benchmark_controls"] == []
+
+    instance = started["instance"]
+    peg = instance["object_positions"]["peg"]
+    target = instance["target"]
+
+    def reach(x: float, y: float, z: float, gripper: float) -> dict[str, object]:
+        result = invoke(
+            runner,
+            [
+                "reach",
+                "--x",
+                str(x),
+                "--y",
+                str(y),
+                "--z",
+                str(z),
+                "--gripper",
+                str(gripper),
+                "--json",
+            ],
+        )
+        return json.loads(result.output)
+
+    reach(peg[0], peg[1], peg[2] + 0.10, 0.0)
+    grasp = reach(peg[0], peg[1], peg[2] + 0.055, 1.0)
+    assert grasp["held_object"] == "peg"
+    reach(peg[0], peg[1], 0.34, 1.0)
+    state = reach(target[0], target[1], 0.34, 1.0)
+    for height in (0.34, 0.27, 0.27):
+        held_peg = next(item for item in state["objects"] if item["name"] == "peg")
+        tool = state["end_effector"]["position"]
+        state = reach(
+            tool[0] + target[0] - held_peg["position"][0],
+            tool[1] + target[1] - held_peg["position"][1],
+            height,
+            1.0,
+        )
+    tool = state["end_effector"]["position"]
+    reach(tool[0], tool[1], 0.27, 0.0)
+
+    measured = json.loads(invoke(runner, ["benchmark", "score", "--json"]).output)
+    assert measured["outcome"] == "PASS"
+    assert measured["score"] is None
+    assert measured["success"] is True
+    assert measured["control_count"] == 8
+    assert measured["measurements"]["released"] is True
+    assert measured["measurements"]["below_rim"] is True
 
 
 def test_cli_motion_error_is_json(tmp_path, monkeypatch) -> None:

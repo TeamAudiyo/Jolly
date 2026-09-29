@@ -83,16 +83,19 @@ After closing, require `held_object` to match the intended object. If it is
 ```bash
 jolly challenge start sort-red --model jolly6 --json
 jolly challenge status --json
-jolly benchmark --cases 5 --json
+jolly benchmark start --json
+# Read the generated instance and issue explicit reach or move controls.
+jolly benchmark score --json
 ```
 
 Read the generated `seed` and `instance` before planning. Never assume fixed
 coordinates from an earlier run. Pass `--seed N` only to replay a case.
 
-Jolly's physics benchmark executes reach, obstacle, and drop-in-hole tasks. Read
-each task's measured outcome. Do not treat scene loading or FK health as task
-performance. Physical hardware uses the separate `jolly hardware benchmark`
-command and never shares a score with PyBullet.
+Jolly's PyBullet benchmark never moves the robot automatically. Read the
+generated peg and hole coordinates, then issue every approach, descend, grasp,
+lift, translate, lower, and release control. `benchmark score` measures the
+result without moving the robot and returns PASS or FAIL with no numeric score.
+Physical hardware uses the separate `jolly hardware benchmark` command.
 
 ## Recovery
 

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "jolly-cli"
-version = "0.4.0"
+version = "0.5.0"
 description = "CLI-native SO-101 physics tasks and physical hardware control"
 readme = "README.md"
 requires-python = ">=3.10"
