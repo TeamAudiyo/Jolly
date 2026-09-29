@@ -34,9 +34,9 @@ diagram or a hand-drawn robot substitute.
 
 ### Randomized terminal benchmark and hardware commands
 
-![Jolly 0.4.0 terminal demo showing different scores for randomized seeds](docs/assets/jolly-terminal-demo.gif)
+![Jolly 0.4.0 terminal demo showing different scores for randomized seeds](docs/assets/jolly-terminal-randomized-v040.gif)
 
-[Watch the MP4 recording](docs/assets/jolly-terminal-demo.mp4)
+[Watch the MP4 recording](docs/assets/jolly-terminal-randomized-v040.mp4)
 
 The terminal recording runs one benchmark case under seeds `1` and `3`. Each
 case includes reach, obstacle, and drop-in-hole tasks. The aggregate scores
