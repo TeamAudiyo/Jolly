@@ -49,9 +49,11 @@ class JointInfo:
     max_velocity: float
 
 
-class PhysicsEngine:
-    """Own a PyBullet world and expose deterministic robot-arm operations."""
+class JollyEngine:
+    """Own the Jolly world, safety contract, state, rendering, and robot operations."""
 
+    name = "JollyEngine"
+    physics_backend = "PyBullet"
     timestep = 1.0 / 240.0
 
     def __init__(
@@ -86,7 +88,7 @@ class PhysicsEngine:
             p.disconnect(self.client)
             raise
 
-    def __enter__(self) -> "PhysicsEngine":
+    def __enter__(self) -> "JollyEngine":
         return self
 
     def __exit__(self, *_: object) -> None:
@@ -137,7 +139,6 @@ class PhysicsEngine:
         rgb[1::3] = raw[1::4]
         rgb[2::3] = raw[2::4]
         return width, height, bytes(rgb)
-
     def _load_world(self) -> None:
         p.resetSimulation(physicsClientId=self.client)
         p.setGravity(0, 0, -9.81, physicsClientId=self.client)
@@ -595,3 +596,7 @@ class PhysicsEngine:
         p.resetDebugVisualizerCamera(0.9, 40, -28, [0.18, 0, 0.14], physicsClientId=self.client)
         while p.isConnected(self.client):
             self._step(1)
+
+
+# Backward-compatible import for applications built before Jolly 0.3.
+PhysicsEngine = JollyEngine
