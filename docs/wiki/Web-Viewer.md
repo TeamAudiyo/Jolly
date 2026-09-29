@@ -16,7 +16,7 @@ Open `http://127.0.0.1:8765`. API documentation is available at
 
 The viewer provides:
 
-- An interactive projected 3D arm scene.
+- An interactive PyBullet render of the official SO-101 CAD meshes.
 - Robot and scene selectors.
 - Joint positions and limits.
 - End-effector pose.
@@ -24,8 +24,8 @@ The viewer provides:
 - Scene objects.
 - A safe local command console for state, reset, move, and reach.
 
-The recording changes from the blocks scene to the insertion task, switches
-camera views, and executes a Cartesian reach through the local command console.
+The recording switches camera views and executes a Cartesian reach in the
+insertion scene through the local command console.
 
 The API writes the same persistent state as the CLI. The default bind is
 loopback-only. Do not use `--unsafe-public` on an untrusted network.

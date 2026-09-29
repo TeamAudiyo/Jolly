@@ -29,9 +29,8 @@ API key, or network connection is required at runtime.
 [Open the full-resolution still](docs/assets/jolly-so101-viewer.png)
 
 The recording uses the official SO-101 CAD meshes in a real PyBullet world. It
-changes from the blocks scene to the insertion task, switches camera views, and
-executes a Cartesian reach. The viewport is not a diagram or a hand-drawn robot
-substitute.
+switches camera views and executes a Cartesian reach in the insertion scene.
+The viewport is not a diagram or a hand-drawn robot substitute.
 
 ### Randomized terminal benchmark and hardware commands
 
@@ -39,10 +38,9 @@ substitute.
 
 [Watch the MP4 recording](docs/assets/jolly-terminal-demo.mp4)
 
-The terminal recording replays the same three contact tasks with seeds `1` and
-`3`. The measured scores differ because each seed creates a different target,
-obstacle, and drop-in-hole case. It also shows the separate physical SO-101
-command group.
+The terminal recording runs one benchmark case under seeds `1` and `3`. Each
+case includes reach, obstacle, and drop-in-hole tasks. The aggregate scores
+differ, and the recording then opens the separate physical SO-101 command help.
 
 ## Install
 
