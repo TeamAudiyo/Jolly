@@ -1,6 +1,6 @@
 ---
 name: jolly
-description: Safely inspect, move, and benchmark local PyBullet robot arms with the Jolly CLI. Use for FK, IK, scene tasks, and pick-and-place.
+description: Safely read, move, and benchmark local robot arms with JollyEngine and JollyDriver. Use for FK, IK, scene tasks, and pick-and-place.
 ---
 
 # Jolly CLI skill
@@ -83,11 +83,15 @@ After closing, require `held_object` to match the intended object. If it is
 ```bash
 jolly challenge start sort-red --model jolly6 --json
 jolly challenge status --json
-jolly benchmark --json
+jolly benchmark --cases 5 --json
 ```
 
-The engine benchmark checks simulator health. A challenge evaluates agent task
-performance. Do not confuse the engine score with a manipulation score.
+Read the generated `seed` and `instance` before planning. Never assume fixed
+coordinates from an earlier run. Pass `--seed N` only to replay a case.
+
+Jolly's randomized engine benchmark checks simulator health. A challenge
+evaluates agent task performance. Do not confuse the engine score with a
+manipulation score.
 
 ## Recovery
 

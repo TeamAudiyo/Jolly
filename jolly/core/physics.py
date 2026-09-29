@@ -32,7 +32,7 @@ def _import_pybullet():
 
 p = _import_pybullet()
 
-from jolly.core.errors import MotionError
+from jolly.core.errors import ConfigurationError, MotionError
 from jolly.core.models import RobotModel, get_model, model_path
 from jolly.core.scenes import get_scene
 
@@ -230,6 +230,26 @@ class PhysicsEngine:
         self._set_gripper_state(0.0)
         self._hold_current_pose()
         self._step(60)
+        return self.state()
+
+    def set_object_positions(self, positions: dict[str, list[float]]) -> dict[str, object]:
+        """Apply a generated scene instance and make it the reset baseline."""
+        specs = self.object_specs
+        for name, position in positions.items():
+            if name not in self.object_ids or name not in specs:
+                raise ConfigurationError(f"Scene '{self.scene_id}' has no object named '{name}'.")
+            if len(position) != 3 or not all(math.isfinite(float(value)) for value in position):
+                raise ConfigurationError(f"Object '{name}' requires three finite coordinates.")
+            normalized = [float(value) for value in position]
+            body_id = self.object_ids[name]
+            _, orientation = p.getBasePositionAndOrientation(body_id, physicsClientId=self.client)
+            p.resetBasePositionAndOrientation(
+                body_id, normalized, orientation, physicsClientId=self.client
+            )
+            p.resetBaseVelocity(
+                body_id, linearVelocity=[0.0, 0.0, 0.0], angularVelocity=[0.0, 0.0, 0.0], physicsClientId=self.client
+            )
+            specs[name]["position"] = normalized
         return self.state()
 
     def restore(self, state: dict[str, object]) -> None:

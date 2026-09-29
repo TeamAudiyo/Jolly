@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from jolly import __version__
 from jolly.core.errors import JollyError
 from jolly.core.models import list_models
-from jolly.core.physics import PhysicsEngine
+from jolly.engine import JollyEngine
 from jolly.core.scenes import list_scenes
 from jolly.core.store import load_state, save_state, state_lock
 
@@ -61,7 +61,7 @@ def _run(
         selected_model = model or (str(saved["model"]["id"]) if saved else "so101")
         selected_scene = scene or (str(saved.get("scene", "empty")) if saved else "empty")
         try:
-            with PhysicsEngine(selected_model, selected_scene) as engine:
+            with JollyEngine(selected_model, selected_scene) as engine:
                 if saved and saved.get("model", {}).get("id") == selected_model and saved.get("scene") == selected_scene:
                     engine.restore(saved)
                 state = operation(engine)
@@ -118,7 +118,7 @@ def render_image(
             saved = load_state()
             selected_model = str(saved["model"]["id"]) if saved else "so101"
             selected_scene = str(saved.get("scene", "empty")) if saved else "empty"
-            with PhysicsEngine(selected_model, selected_scene) as engine:
+            with JollyEngine(selected_model, selected_scene) as engine:
                 if saved:
                     engine.restore(saved)
                 rendered_width, rendered_height, rgb = engine.camera_rgb(

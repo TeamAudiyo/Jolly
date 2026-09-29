@@ -21,7 +21,7 @@ CHALLENGES: dict[str, Challenge] = {
         id="reach-center",
         name="Reach Center",
         scene="empty",
-        description="Move the tool to (0.35, 0.00, 0.18) without a collision.",
+        description="Move the tool to the generated target without a collision.",
         success="End-effector error <= 3 cm and no collision.",
         max_commands=3,
     ),
@@ -29,7 +29,7 @@ CHALLENGES: dict[str, Challenge] = {
         id="sort-red",
         name="Sort Red Block",
         scene="blocks",
-        description="Place red_block on left_target.",
+        description="Place red_block on the generated target pad.",
         success="Red block center is within 7 cm of the left target center.",
         max_commands=12,
     ),
@@ -37,7 +37,7 @@ CHALLENGES: dict[str, Challenge] = {
         id="shelf-load",
         name="Shelf Load",
         scene="shelf",
-        description="Place cargo on the shelf surface.",
+        description="Place randomized cargo on the randomized shelf surface.",
         success="Cargo rests inside the shelf bounds above 12 cm.",
         max_commands=14,
     ),
@@ -45,7 +45,7 @@ CHALLENGES: dict[str, Challenge] = {
         id="obstacle-reach",
         name="Obstacle Reach",
         scene="obstacles",
-        description="Reach within 7 cm of goal while remaining collision-free.",
+        description="Reach the generated goal through randomized barriers without collision.",
         success="Tool-to-goal error <= 7 cm and no collision.",
         max_commands=10,
     ),
@@ -74,24 +74,31 @@ def evaluate(challenge_id: str, state: dict[str, object]) -> dict[str, object]:
     ee = state["end_effector"]["position"]
     objects = {item["name"]: item for item in state.get("objects", [])}
     collision = bool(state["collisions"]["collision"])
+    instance = state.get("challenge_instance")
+    if not isinstance(instance, dict):
+        raise ConfigurationError("This challenge has no randomized instance. Start it again.")
     metrics: dict[str, object]
     success = False
     if challenge_id == "reach-center":
-        error = math.dist(ee, [0.35, 0.0, 0.18])
+        target = instance["target"]
+        error = math.dist(ee, target)
         success = error <= 0.03 and not collision
-        metrics = {"target_error_meters": round(error, 6), "collision_free": not collision}
+        metrics = {"target": target, "target_error_meters": round(error, 6), "collision_free": not collision}
     elif challenge_id == "sort-red":
-        position = objects["red_block"]["position"]
-        error = math.dist(position[:2], [0.16, -0.27])
+        object_name = str(instance["object_name"])
+        position = objects[object_name]["position"]
+        target = instance["target"]
+        error = math.dist(position[:2], target[:2])
         success = error <= 0.07 and position[2] <= 0.09
-        metrics = {"target_xy_error_meters": round(error, 6), "block_height_meters": position[2]}
+        metrics = {"object": object_name, "target": instance["target_name"], "target_xy_error_meters": round(error, 6), "block_height_meters": position[2]}
     elif challenge_id == "shelf-load":
         position = objects["cargo"]["position"]
-        inside = 0.16 <= position[0] <= 0.40 and 0.10 <= position[1] <= 0.26
-        success = inside and position[2] >= 0.12
+        bounds = instance["target_bounds"]
+        inside = bounds["x"][0] <= position[0] <= bounds["x"][1] and bounds["y"][0] <= position[1] <= bounds["y"][1]
+        success = inside and position[2] >= bounds["minimum_z"]
         metrics = {"inside_shelf_xy": inside, "cargo_height_meters": position[2]}
     else:
-        goal = objects["goal"]["position"]
+        goal = instance["target"]
         error = math.dist(ee, goal)
         success = error <= 0.07 and not collision
         metrics = {"goal_error_meters": round(error, 6), "collision_free": not collision}
@@ -103,6 +110,8 @@ def evaluate(challenge_id: str, state: dict[str, object]) -> dict[str, object]:
     return {
         "ok": True,
         "challenge": vars(challenge),
+        "seed": state.get("challenge_seed"),
+        "instance": instance,
         "success": success,
         "score": 100 if success else 0,
         "metrics": metrics,

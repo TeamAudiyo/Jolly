@@ -21,10 +21,14 @@ jolly render
 jolly scene list --json
 jolly scene load blocks --json
 jolly challenge list --json
-jolly challenge start sort-red --model jolly6 --json
+jolly challenge start sort-red --model jolly6 [--seed N] --json
 jolly challenge status --json
-jolly benchmark --json
+jolly benchmark [--seed N] [--cases 3] --json
 ```
+
+Challenge starts use a fresh random seed by default. The JSON response contains
+the seed and generated instance. Supply `--seed N` to replay the exact case.
+The benchmark randomizes every robot and scene check through `JollyDriver`.
 
 ## Viewers
 

@@ -103,8 +103,8 @@ Important commands:
 | `jolly render` | Show a Rich status table and terminal stick figure. |
 | `jolly reset` | Select a model and scene, then home the robot. |
 | `jolly scene list/load` | Discover and load deterministic scenes. |
-| `jolly challenge list/start/status` | Run agent manipulation challenges. |
-| `jolly benchmark` | Check robot loading, FK, and scene construction. |
+| `jolly challenge list/start/status` | Run seeded randomized manipulation challenges. |
+| `jolly benchmark [--seed N] [--cases N]` | Run randomized engine checks with reproducible inputs. |
 
 Jolly rejects joint-limit violations and unsafe workspace targets. By default,
 Jolly rolls back a motion that creates a collision. Use `--allow-collision`
@@ -124,6 +124,8 @@ jolly-cli/
 │   ├── cli.py
 │   ├── benchmark.py
 │   ├── challenges.py
+│   ├── driver.py
+│   ├── engine.py
 │   ├── assets/
 │   │   ├── jolly6.urdf
 │   │   └── robots/so101/
@@ -146,11 +148,32 @@ jolly-cli/
 
 ## Physics scope
 
-PyBullet performs rigid-body simulation, FK, IK, contact generation, and scene
-settling. Jolly uses deterministic state restoration across short CLI processes.
+`JollyEngine` owns state, safety, motion rollback, grasping, rendering, and the
+public simulator contract. `JollyDriver` generates seeded challenge and
+benchmark cases. The project does not depend on Inspect, Inspect AI, or an
+external robotics benchmark driver.
+
+PyBullet is the low-level open-source physics backend. It performs rigid-body
+simulation, FK, IK, contact generation, and scene settling. Jolly uses
+deterministic state restoration across short CLI processes.
 The grasp helper attaches a nearby graspable object while the gripper is closed.
 This helper makes terminal pick-and-place repeatable. It is not a soft-contact or
 motor-current model.
+
+## Randomized evaluation
+
+Every challenge start generates a new target, object layout, or obstacle layout.
+The result includes the seed and full instance so results stay auditable. Omit
+`--seed` for a fresh unpredictable case. Supply a seed to reproduce a failure:
+
+```bash
+jolly challenge start sort-red --seed 42017 --json
+jolly benchmark --seed 42017 --cases 5 --json
+```
+
+The benchmark generates new joint configurations for every robot case and new
+object layouts for every scene case. This prevents a policy from passing only by
+memorizing the original fixed coordinates.
 
 The bundled SO-101 model is the official Apache-2.0 new-calibration URDF from
 The Robot Studio. Jolly includes the 13 referenced STL meshes from pinned commit

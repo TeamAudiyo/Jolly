@@ -13,9 +13,10 @@ from rich.table import Table
 from jolly import __version__
 from jolly.benchmark import run_benchmark
 from jolly.challenges import evaluate, get_challenge, list_challenges
+from jolly.driver import JollyDriver
+from jolly.engine import JollyEngine
 from jolly.core.errors import ConfigurationError, JollyError
 from jolly.core.models import get_model, list_models
-from jolly.core.physics import PhysicsEngine
 from jolly.core.scenes import get_scene, list_scenes
 from jolly.core.store import load_state, save_state, state_lock
 
@@ -48,7 +49,7 @@ def parse_joints(_: click.Context, __: click.Parameter, value: str | None) -> li
 @contextmanager
 def current_engine(
     *, model: str | None = None, scene: str | None = None, gui: bool = False, recover: bool = False
-) -> Iterator[PhysicsEngine]:
+) -> Iterator[JollyEngine]:
     with state_lock():
         try:
             saved = load_state()
@@ -58,14 +59,14 @@ def current_engine(
             saved = None
         selected_model = model or (str(saved["model"]["id"]) if saved else "jolly6")
         selected_scene = scene or (str(saved.get("scene", "empty")) if saved else "empty")
-        with PhysicsEngine(model=selected_model, scene=selected_scene, gui=gui, realtime=gui) as engine:
+        with JollyEngine(model=selected_model, scene=selected_scene, gui=gui, realtime=gui) as engine:
             if saved and saved.get("model", {}).get("id") == selected_model and saved.get("scene") == selected_scene:
                 engine.restore(saved)
             yield engine
 
 
 def persist(
-    engine: PhysicsEngine,
+    engine: JollyEngine,
     *,
     extra: dict[str, object] | None = None,
     count_challenge_command: bool = False,
@@ -73,7 +74,9 @@ def persist(
     state = engine.state()
     previous = load_state() or {}
     if "active_challenge" in previous:
-        state["active_challenge"] = previous["active_challenge"]
+        for key in ("active_challenge", "challenge_seed", "challenge_instance"):
+            if key in previous:
+                state[key] = previous[key]
         state["challenge_commands"] = int(previous.get("challenge_commands", 0)) + int(count_challenge_command)
     if extra:
         state.update(extra)
@@ -255,15 +258,21 @@ def challenge_list_command(json_output: bool) -> None:
 @challenge_group.command("start")
 @click.argument("challenge_id", type=click.Choice([item["id"] for item in list_challenges()]))
 @click.option("model", "--model", type=click.Choice([item["id"] for item in list_models()]), default="jolly6")
+@click.option("seed", "--seed", type=click.IntRange(0, 2**63 - 1))
 @click.option("json_output", "--json", is_flag=True)
-def challenge_start_command(challenge_id: str, model: str, json_output: bool) -> None:
+def challenge_start_command(challenge_id: str, model: str, seed: int | None, json_output: bool) -> None:
     challenge = get_challenge(challenge_id)
+    driver = JollyDriver(seed)
+    instance = driver.challenge_instance(challenge_id)
     with current_engine(model=model, scene=challenge.scene) as engine:
-        state = engine.reset()
+        engine.reset()
+        state = engine.set_object_positions(instance["object_positions"])
         state["active_challenge"] = challenge_id
         state["challenge_commands"] = 0
+        state["challenge_seed"] = driver.seed
+        state["challenge_instance"] = instance
         save_state(state)
-    emit({"ok": True, "challenge": vars(challenge), "state": state}, json_output=json_output, message=f"Started '{challenge.name}' in scene '{challenge.scene}'.")
+    emit({"ok": True, "challenge": vars(challenge), "seed": driver.seed, "instance": instance, "state": state}, json_output=json_output, message=f"Started randomized '{challenge.name}' with seed {driver.seed}.")
 
 
 @challenge_group.command("status")
@@ -281,10 +290,12 @@ def challenge_status_command(challenge_id: str | None, json_output: bool) -> Non
 
 
 @main.command("benchmark")
+@click.option("seed", "--seed", type=click.IntRange(0, 2**63 - 1))
+@click.option("cases", "--cases", type=click.IntRange(1, 25), default=3, show_default=True)
 @click.option("json_output", "--json", is_flag=True)
-def benchmark_command(json_output: bool) -> None:
-    """Run the deterministic local engine benchmark."""
-    data = run_benchmark()
+def benchmark_command(seed: int | None, cases: int, json_output: bool) -> None:
+    """Run Jolly's seeded randomized engine benchmark."""
+    data = run_benchmark(seed=seed, cases=cases)
     emit(data, json_output=json_output, message=f"Benchmark score: {data['score']:.1f}/100 ({data['passed']}/{data['total']} checks)")
 
 
