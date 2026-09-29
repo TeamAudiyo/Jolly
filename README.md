@@ -19,20 +19,30 @@ The package also accepts scenes, challenges, an engine benchmark, a native
 PyBullet viewer, and an optional local web viewer. No cloud service, MCP server,
 API key, or network connection is required at runtime.
 
-## See Jolly in action
+## See Jolly 0.4.0 in action
 
-### Local web simulator
+### Interactive SO-101 simulator
 
-![Jolly web viewer rendering the official SO-101 CAD model](docs/assets/jolly-so101-viewer.png)
+![Jolly 0.4.0 web viewer changing scenes, camera views, and robot pose](docs/assets/jolly-web-demo.gif)
 
-The viewport above is a real PyBullet render of the official SO-101 CAD meshes.
-It is not a diagram or a hand-drawn robot substitute.
+[Watch the full WebM recording](docs/assets/jolly-web-demo.webm) ·
+[Open the full-resolution still](docs/assets/jolly-so101-viewer.png)
 
-### Terminal-native control
+The recording uses the official SO-101 CAD meshes in a real PyBullet world. It
+changes from the blocks scene to the insertion task, switches camera views, and
+executes a Cartesian reach. The viewport is not a diagram or a hand-drawn robot
+substitute.
 
-![Jolly terminal CLI demo](docs/assets/jolly-terminal-demo.gif)
+### Randomized terminal benchmark and hardware commands
+
+![Jolly 0.4.0 terminal demo showing different scores for randomized seeds](docs/assets/jolly-terminal-demo.gif)
 
 [Watch the MP4 recording](docs/assets/jolly-terminal-demo.mp4)
+
+The terminal recording replays the same three contact tasks with seeds `1` and
+`3`. The measured scores differ because each seed creates a different target,
+obstacle, and drop-in-hole case. It also shows the separate physical SO-101
+command group.
 
 ## Install
 
