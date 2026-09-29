@@ -48,7 +48,14 @@ def _run(
     count_challenge_command: bool = False,
 ) -> dict[str, object]:
     with state_lock():
-        saved = load_state()
+        try:
+            saved = load_state()
+        except JollyError as exc:
+            if preserve_metadata:
+                raise HTTPException(
+                    status_code=400, detail={"type": exc.__class__.__name__, "message": str(exc)}
+                ) from exc
+            saved = None  # reset replaces a corrupt state file
         selected_model = model or (str(saved["model"]["id"]) if saved else "jolly6")
         selected_scene = scene or (str(saved.get("scene", "empty")) if saved else "empty")
         try:

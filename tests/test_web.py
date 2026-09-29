@@ -18,3 +18,14 @@ def test_web_viewer_and_api(tmp_path, monkeypatch) -> None:
     invalid = client.post("/api/move", json={"joints": [999, 0, 0, 0, 0, 0]})
     assert invalid.status_code == 400
     assert invalid.json()["detail"]["type"] == "MotionError"
+
+
+def test_web_corrupt_state_is_400_and_reset_recovers(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("JOLLY_STATE_DIR", str(tmp_path))
+    (tmp_path / "state.json").write_text("{bad", encoding="utf-8")
+    client = TestClient(app)
+    bad = client.get("/api/state")
+    assert bad.status_code == 400
+    assert bad.json()["detail"]["type"] == "ConfigurationError"
+    assert client.post("/api/reset", json={}).status_code == 200
+    assert client.get("/api/state").status_code == 200

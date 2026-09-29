@@ -56,3 +56,19 @@ def test_carried_object_floor_collision_rolls_back() -> None:
         with pytest.raises(MotionError, match="collision"):
             engine.reach(0.30, -0.16, 0.04, gripper=1.0)
         assert engine.state()["end_effector"]["position"] == pytest.approx(safe_position, abs=1e-4)
+
+
+def test_non_finite_inputs_rejected_clearly() -> None:
+    with PhysicsEngine() as engine:
+        with pytest.raises(MotionError, match="finite"):
+            engine.reach(float("nan"), 0.0, 0.2)
+        with pytest.raises(MotionError, match="finite"):
+            engine.move_joints([float("nan"), 0, 0, 0, 0, 0])
+
+
+def test_allow_collision_motion_stays_within_joint_limits() -> None:
+    with PhysicsEngine() as engine:
+        state = engine.move_joints([0, 120, 120, 0, 0, 0], allow_collision=True)
+        for joint in state["joints"]:
+            low, high = joint["limits_degrees"]
+            assert low <= joint["position_degrees"] <= high

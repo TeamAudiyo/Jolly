@@ -46,9 +46,16 @@ def parse_joints(_: click.Context, __: click.Parameter, value: str | None) -> li
 
 
 @contextmanager
-def current_engine(*, model: str | None = None, scene: str | None = None, gui: bool = False) -> Iterator[PhysicsEngine]:
+def current_engine(
+    *, model: str | None = None, scene: str | None = None, gui: bool = False, recover: bool = False
+) -> Iterator[PhysicsEngine]:
     with state_lock():
-        saved = load_state()
+        try:
+            saved = load_state()
+        except ConfigurationError:
+            if not recover:
+                raise
+            saved = None
         selected_model = model or (str(saved["model"]["id"]) if saved else "jolly6")
         selected_scene = scene or (str(saved.get("scene", "empty")) if saved else "empty")
         with PhysicsEngine(model=selected_model, scene=selected_scene, gui=gui, realtime=gui) as engine:
@@ -178,7 +185,7 @@ def fk_command(joints: list[float] | None, json_output: bool) -> None:
 @click.option("json_output", "--json", is_flag=True)
 def reset_command(model: str, scene: str, json_output: bool) -> None:
     """Reset the world and home the selected robot."""
-    with current_engine(model=model, scene=scene) as engine:
+    with current_engine(model=model, scene=scene, recover=True) as engine:
         data = engine.reset()
         save_state(data)
     emit(data, json_output=json_output, message=f"Reset {model} in scene '{scene}'.")

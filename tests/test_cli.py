@@ -109,3 +109,12 @@ def test_public_web_bind_requires_explicit_flag() -> None:
     result = CliRunner().invoke(main, ["serve", "--host", "0.0.0.0"])
     assert result.exit_code != 0
     assert "--unsafe-public" in result.output
+
+
+def test_reset_recovers_from_corrupt_state(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("JOLLY_STATE_DIR", str(tmp_path))
+    (tmp_path / "state.json").write_text("{bad", encoding="utf-8")
+    runner = CliRunner()
+    assert runner.invoke(main, ["state", "--json"]).exit_code == 2
+    invoke(runner, ["reset", "--json"])
+    invoke(runner, ["state", "--json"])

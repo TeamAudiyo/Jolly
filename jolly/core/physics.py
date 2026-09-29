@@ -216,6 +216,8 @@ class PhysicsEngine:
     ) -> dict[str, object]:
         if len(degrees) != self.model.dof:
             raise MotionError(f"Model '{self.model.id}' needs {self.model.dof} joint angles, received {len(degrees)}.")
+        if not all(math.isfinite(float(value)) for value in degrees):
+            raise MotionError("Joint angles must be finite numbers.")
         targets = [math.radians(float(value)) for value in degrees]
         for target, info in zip(targets, self.arm_joints, strict=True):
             if not info.lower <= target <= info.upper:
@@ -255,6 +257,7 @@ class PhysicsEngine:
             self._update_grasp()
         self._hold_current_pose()
         self._step(8)
+        self._clamp_arm_to_limits()
         final_collisions = self.collisions()
         if final_collisions["collision"] and not allow_collision:
             for info, value in zip(self.arm_joints, start, strict=True):
@@ -265,6 +268,14 @@ class PhysicsEngine:
             self._hold_current_pose()
             raise MotionError("Motion rolled back because settling created a collision.")
         return self.state()
+
+    def _clamp_arm_to_limits(self) -> None:
+        for info in self.arm_joints:
+            value = p.getJointState(self.robot_id, info.index, physicsClientId=self.client)[0]
+            clamped = min(max(value, info.lower), info.upper)
+            if clamped != value:
+                p.resetJointState(self.robot_id, info.index, clamped, physicsClientId=self.client)
+        self._hold_current_pose()
 
     def reach(
         self,
@@ -278,6 +289,8 @@ class PhysicsEngine:
         tolerance: float = 0.025,
     ) -> dict[str, object]:
         target = [float(x), float(y), float(z)]
+        if not all(math.isfinite(value) for value in target):
+            raise MotionError("Target coordinates must be finite numbers.")
         if z < 0.005 or math.sqrt(x * x + y * y + z * z) > 0.75:
             raise MotionError("Target is outside the simulator safety workspace.")
         solution = p.calculateInverseKinematics(
