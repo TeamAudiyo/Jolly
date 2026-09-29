@@ -96,6 +96,48 @@ class PhysicsEngine:
         if p.isConnected(self.client):
             p.disconnect(self.client)
 
+    def camera_rgb(
+        self,
+        *,
+        width: int = 960,
+        height: int = 640,
+        yaw: float = 42.0,
+        pitch: float = -28.0,
+        distance: float = 0.85,
+    ) -> tuple[int, int, bytes]:
+        """Render the current physical world with PyBullet's local renderer."""
+        view = p.computeViewMatrixFromYawPitchRoll(
+            cameraTargetPosition=[0.12, 0.0, 0.16],
+            distance=distance,
+            yaw=yaw,
+            pitch=pitch,
+            roll=0.0,
+            upAxisIndex=2,
+        )
+        projection = p.computeProjectionMatrixFOV(
+            fov=48.0,
+            aspect=width / height,
+            nearVal=0.01,
+            farVal=5.0,
+        )
+        result = p.getCameraImage(
+            width,
+            height,
+            viewMatrix=view,
+            projectionMatrix=projection,
+            lightDirection=[-1.0, -0.6, 2.0],
+            shadow=1,
+            renderer=p.ER_TINY_RENDERER,
+            physicsClientId=self.client,
+        )
+        rgba = result[2]
+        raw = rgba.tobytes() if hasattr(rgba, "tobytes") else bytes(rgba)
+        rgb = bytearray(width * height * 3)
+        rgb[0::3] = raw[0::4]
+        rgb[1::3] = raw[1::4]
+        rgb[2::3] = raw[2::4]
+        return width, height, bytes(rgb)
+
     def _load_world(self) -> None:
         p.resetSimulation(physicsClientId=self.client)
         p.setGravity(0, 0, -9.81, physicsClientId=self.client)
@@ -330,7 +372,7 @@ class PhysicsEngine:
             raise MotionError("Gripper must be between 0.0 (open) and 1.0 (closed).")
         self.gripper = float(value)
         for info in self.gripper_joints:
-            target = info.upper * (1.0 - self.gripper)
+            target = info.upper - self.gripper * (info.upper - info.lower)
             p.resetJointState(self.robot_id, info.index, target, physicsClientId=self.client)
 
     def _hold_current_pose(self) -> None:

@@ -7,12 +7,14 @@ URDF uses primitive geometry and ships under `MIT OR Apache-2.0`.
 
 ## SO-101 profile
 
-`so101` is a lightweight five-axis simulation profile with a gripper. It uses
-original primitive geometry. Joint names, selected dimensions, and kinematic
-limits derive from The Robot Studio's Apache-2.0 SO-101 metadata.
+`so101` uses the official five-axis new-calibration URDF and its 13 referenced
+STL meshes. Jolly vendors the unmodified files from pinned commit
+`5f6d2b876a53a4872e405b991dd925556c9e38a4` of The Robot Studio's SO-ARM100
+repository.
 
-The profile does not include upstream CAD meshes. It does not claim visual
-hardware fidelity or endorsement by The Robot Studio or Hugging Face.
+The upstream model is Apache-2.0. Jolly includes the upstream license,
+`CITATION.cff`, README, and a source record. Jolly does not claim endorsement by
+The Robot Studio or Hugging Face.
 
 ## Physics engine
 

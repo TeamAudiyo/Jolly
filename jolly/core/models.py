@@ -52,8 +52,8 @@ MODELS: dict[str, RobotModel] = {
     ),
     "so101": RobotModel(
         id="so101",
-        name="SO-101 simplified simulation profile",
-        urdf="so101.urdf",
+        name="SO-101 official simulation model",
+        urdf="robots/so101/so101_new_calib.urdf",
         arm_joint_names=(
             "shoulder_pan",
             "shoulder_lift",
@@ -62,10 +62,10 @@ MODELS: dict[str, RobotModel] = {
             "wrist_roll",
         ),
         gripper_joint_names=("gripper",),
-        end_effector_link="tool_link",
+        end_effector_link="gripper_frame_link",
         home_degrees=(0.0, 0.0, 0.0, 0.0, 0.0),
-        description="Lightweight collision model that follows the open SO-101 five-axis kinematic layout.",
-        source="Derived from TheRobotStudio/SO-ARM100 SO-101 URDF metadata",
+        description="Official SO-101 new-calibration URDF and CAD meshes from The Robot Studio.",
+        source="TheRobotStudio/SO-ARM100 @ 5f6d2b876a53a4872e405b991dd925556c9e38a4",
         license="Apache-2.0",
     ),
 }

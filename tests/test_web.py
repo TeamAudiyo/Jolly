@@ -15,6 +15,10 @@ def test_web_viewer_and_api(tmp_path, monkeypatch) -> None:
     state = client.get("/api/state")
     assert state.status_code == 200
     assert len(state.json()["skeleton_points"]) >= 7
+    rendered = client.get("/api/render.png?width=320&height=240")
+    assert rendered.status_code == 200
+    assert rendered.headers["content-type"] == "image/png"
+    assert rendered.content.startswith(b"\x89PNG\r\n\x1a\n")
     invalid = client.post("/api/move", json={"joints": [999, 0, 0, 0, 0, 0]})
     assert invalid.status_code == 400
     assert invalid.json()["detail"]["type"] == "MotionError"

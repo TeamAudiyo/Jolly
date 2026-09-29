@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import struct
+import zlib
 from importlib.resources import files
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from jolly import __version__
@@ -32,7 +34,7 @@ class ReachRequest(BaseModel):
 
 
 class ResetRequest(BaseModel):
-    model: str = "jolly6"
+    model: str = "so101"
     scene: str = "empty"
 
 
@@ -56,7 +58,7 @@ def _run(
                     status_code=400, detail={"type": exc.__class__.__name__, "message": str(exc)}
                 ) from exc
             saved = None  # reset replaces a corrupt state file
-        selected_model = model or (str(saved["model"]["id"]) if saved else "jolly6")
+        selected_model = model or (str(saved["model"]["id"]) if saved else "so101")
         selected_scene = scene or (str(saved.get("scene", "empty")) if saved else "empty")
         try:
             with PhysicsEngine(selected_model, selected_scene) as engine:
@@ -83,6 +85,58 @@ def index() -> str:
 @app.get("/api/config")
 def config() -> dict[str, object]:
     return {"ok": True, "version": __version__, "models": list_models(), "scenes": list_scenes()}
+
+
+def _png_chunk(kind: bytes, payload: bytes) -> bytes:
+    return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", zlib.crc32(kind + payload))
+
+
+def _encode_png(width: int, height: int, rgb: bytes) -> bytes:
+    stride = width * 3
+    scanlines = b"".join(b"\0" + rgb[row * stride : (row + 1) * stride] for row in range(height))
+    header = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    return b"\x89PNG\r\n\x1a\n" + _png_chunk(b"IHDR", header) + _png_chunk(
+        b"IDAT", zlib.compress(scanlines, 6)
+    ) + _png_chunk(b"IEND", b"")
+
+
+@app.get("/api/render.png", response_class=Response)
+def render_image(
+    yaw: float = 42.0,
+    pitch: float = -28.0,
+    distance: float = 0.85,
+    width: int = 960,
+    height: int = 640,
+) -> Response:
+    yaw = max(-360.0, min(360.0, yaw))
+    pitch = max(-89.0, min(20.0, pitch))
+    distance = max(0.35, min(2.0, distance))
+    width = max(320, min(1440, width))
+    height = max(240, min(960, height))
+    with state_lock():
+        try:
+            saved = load_state()
+            selected_model = str(saved["model"]["id"]) if saved else "so101"
+            selected_scene = str(saved.get("scene", "empty")) if saved else "empty"
+            with PhysicsEngine(selected_model, selected_scene) as engine:
+                if saved:
+                    engine.restore(saved)
+                rendered_width, rendered_height, rgb = engine.camera_rgb(
+                    width=width,
+                    height=height,
+                    yaw=yaw,
+                    pitch=pitch,
+                    distance=distance,
+                )
+        except JollyError as exc:
+            raise HTTPException(
+                status_code=400, detail={"type": exc.__class__.__name__, "message": str(exc)}
+            ) from exc
+    return Response(
+        _encode_png(rendered_width, rendered_height, rgb),
+        media_type="image/png",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/api/state")

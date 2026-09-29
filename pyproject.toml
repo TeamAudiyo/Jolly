@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "jolly-cli"
-version = "0.1.1"
+version = "0.2.0"
 description = "Local, CLI-native robot-arm physics simulation for humans and LLM agents"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -43,7 +43,7 @@ Issues = "https://github.com/TeamAudiyo/Jolly/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["jolly"]
-artifacts = ["jolly/assets/*.urdf", "jolly/web/*.html"]
+artifacts = ["jolly/assets/*.urdf", "jolly/assets/robots/**/*", "jolly/web/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

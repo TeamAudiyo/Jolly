@@ -6,7 +6,7 @@ It uses PyBullet in deterministic direct mode and saves state between commands.
 Jolly includes two offline robot profiles:
 
 - `jolly6`: an original six-axis arm with a parallel gripper.
-- `so101`: a lightweight five-axis SO-101 simulation profile with a gripper.
+- `so101`: the official five-axis SO-101 URDF and CAD meshes with a gripper.
 
 The package also accepts scenes, challenges, an engine benchmark, a native
 PyBullet viewer, and an optional local web viewer. No cloud service, MCP server,
@@ -16,9 +16,10 @@ API key, or network connection is required at runtime.
 
 ### Local web simulator
 
-![Jolly local web simulator demo](docs/assets/jolly-web-demo.gif)
+![Jolly web viewer rendering the official SO-101 CAD model](docs/assets/jolly-so101-viewer.png)
 
-[Watch the WebM recording](docs/assets/jolly-web-demo.webm)
+The viewport above is a real PyBullet render of the official SO-101 CAD meshes.
+It is not a diagram or a hand-drawn robot substitute.
 
 ### Terminal-native control
 
@@ -56,9 +57,9 @@ npx skills add ./skills/jolly
 
 ```bash
 jolly models --json
-jolly reset --model jolly6 --scene blocks --json
+jolly reset --model so101 --scene blocks --json
 jolly state --json
-jolly move --joints "0,-25,70,-45,0,0" --gripper 0.0 --json
+jolly move --joints "0,-20,40,-20,0" --gripper 0.0 --json
 jolly reach --x 0.30 --y 0.10 --z 0.18 --gripper 0.0 --json
 jolly render
 jolly challenge list --json
@@ -74,10 +75,15 @@ jolly serve --host 127.0.0.1 --port 8765
 Open `http://127.0.0.1:8765`. The JSON API documentation is at
 `http://127.0.0.1:8765/api/docs`.
 
+The clean web viewer displays the physical PyBullet world. PyBullet's local
+TinyRenderer draws the official SO-101 STL meshes, scene objects, shadows, and
+floor. Drag the viewport to orbit. Scroll to zoom. The viewer has no CDN,
+external 3D service, or proprietary rendering dependency.
+
 Open the native PyBullet window on a machine with a display:
 
 ```bash
-jolly viewer --model jolly6 --scene blocks
+jolly viewer --model so101 --scene blocks
 ```
 
 ## Command contract
@@ -120,7 +126,12 @@ jolly-cli/
 │   ├── challenges.py
 │   ├── assets/
 │   │   ├── jolly6.urdf
-│   │   └── so101.urdf
+│   │   └── robots/so101/
+│   │       ├── so101_new_calib.urdf
+│   │       ├── assets/*.stl
+│   │       ├── LICENSE-APACHE
+│   │       ├── CITATION.cff
+│   │       └── SOURCE.md
 │   ├── core/
 │   │   ├── physics.py
 │   │   ├── models.py
@@ -141,9 +152,10 @@ The grasp helper attaches a nearby graspable object while the gripper is closed.
 This helper makes terminal pick-and-place repeatable. It is not a soft-contact or
 motor-current model.
 
-The bundled SO-101 profile uses original primitive collision geometry. Its
-joint layout and limits derive from Apache-2.0 upstream robot metadata. It does
-not include the upstream CAD meshes and does not claim visual hardware fidelity.
+The bundled SO-101 model is the official Apache-2.0 new-calibration URDF from
+The Robot Studio. Jolly includes the 13 referenced STL meshes from pinned commit
+`5f6d2b876a53a4872e405b991dd925556c9e38a4`. Jolly keeps the upstream files
+unmodified and includes their license, citation, source record, and README.
 
 ## License
 
