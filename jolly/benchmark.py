@@ -79,7 +79,7 @@ def _run_obstacle_task(model: str, instance: dict[str, Any]) -> dict[str, object
             actual = state["end_effector"]["position"]
             error = math.dist(actual, goal)
             collision_free = not state["collisions"]["collision"]
-            score = weight * _bounded_accuracy(error, 0.02, 0.10)
+            score = weight * _bounded_accuracy(error, 0.05, 0.12)
             if not collision_free:
                 score = 0.0
             return _task_result(
