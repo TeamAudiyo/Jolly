@@ -14,6 +14,7 @@ from jolly.robots.registry import arm_profile, model_for_arm, workspace_from
 
 class LeRobotDriver:
     def __init__(self, arm: str, config_path: str):
+        self.emergency_stop_attempted = False
         self.profile = arm_profile(arm)
         self.config = read_json(config_path)
         if self.config.get("arm") != arm or self.config.get("use_degrees") is not True:
@@ -94,6 +95,7 @@ class LeRobotDriver:
                 self.robot.disconnect()
 
     def _emergency_stop(self) -> None:
+        self.emergency_stop_attempted = True
         try:
             self.stop()
         except Exception:

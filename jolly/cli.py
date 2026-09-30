@@ -553,8 +553,10 @@ def run_arm(arm, config, confirm, operation, requested=None):
         if requested is not None:
             ensure_control_allowed(saved, "hardware")
         result = {}
+        driver = None
         try:
-            with LeRobotDriver(arm, config) as driver:
+            driver = LeRobotDriver(arm, config)
+            with driver:
                 if operation == "state":
                     result = driver.state()
                 elif operation == "stop":
@@ -582,7 +584,8 @@ def run_arm(arm, config, confirm, operation, requested=None):
                 result["control_error"] = str(exc)
                 saved["benchmark_controls"] = benchmark_control_history(saved, source="lerobot", command=operation,
                                                                          requested=requested, result=result)
-                session_from(saved)["aborted"] = {"at": utc_now(), "error": str(exc), "emergency_stop_attempted": True}
+                session_from(saved)["aborted"] = {"at": utc_now(), "error": str(exc),
+                                                  "emergency_stop_attempted": bool(driver and driver.emergency_stop_attempted)}
                 save_state(saved)
             raise
 
