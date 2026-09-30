@@ -47,6 +47,16 @@ def test_tracker_document_freshness_frames_and_trial_identity(tmp_path):
     document.write_text(json.dumps(payload))
     with pytest.raises(ConfigurationError, match="finite"):
         measure_hardware(str(cfg), ["part"], trial_id="123:1")
+    payload["objects"]["part"]["position_meters"] = [.1, .2]
+    payload["objects"]["part"]["dimensions"] = 2.0
+    document.write_text(json.dumps(payload))
+    with pytest.raises(ConfigurationError, match="dimensions"):
+        measure_hardware(str(cfg), ["part"], trial_id="123:1")
+    payload["objects"]["part"]["dimensions"] = 2
+    payload["objects"]["part"]["position_meters"] = [".1", True]
+    document.write_text(json.dumps(payload))
+    with pytest.raises(ConfigurationError, match="strings or booleans"):
+        measure_hardware(str(cfg), ["part"], trial_id="123:1")
 
 
 def test_real_so100_model_and_custom_model_registration(tmp_path, monkeypatch):

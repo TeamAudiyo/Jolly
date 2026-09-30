@@ -27,6 +27,8 @@ def read_json(path: str) -> dict[str, Any]:
 def vector(value: Any, length: int, label: str) -> list[float]:
     if not isinstance(value, (list, tuple)) or len(value) != length:
         raise ConfigurationError(f"{label} must contain {length} finite numbers.")
+    if any(isinstance(v, bool) or not isinstance(v, (int, float)) for v in value):
+        raise ConfigurationError(f"{label} must contain finite numbers, not strings or booleans.")
     try:
         result = [float(v) for v in value]
     except (ValueError, TypeError) as exc:
@@ -85,7 +87,7 @@ def measure_hardware(config_path: str, names: list[str], *, trial_id: str, not_b
         if not isinstance(item, dict):
             raise ConfigurationError(f"Missing measured object {name}.")
         dimensions = item.get("dimensions", 3)
-        if dimensions not in (2, 3):
+        if not isinstance(dimensions, int) or isinstance(dimensions, bool) or dimensions not in (2, 3):
             raise ConfigurationError("Measurement dimensions must be 2 or 3.")
         position = vector(item.get("position_meters"), dimensions, name)
         try:

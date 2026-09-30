@@ -97,6 +97,9 @@ def test_budget_and_reset_invalidation(tmp_path, monkeypatch):
     assert "active_benchmark" not in reset
     state = call(runner, "state")
     assert state["benchmark_invalidations"] == reset["benchmark_invalidations"]
+    history = call(runner, "benchmark", "history")
+    assert history["invalidations"] == reset["benchmark_invalidations"]
+    assert history["trials"] == []
     assert runner.invoke(main, ["benchmark", "score", "--json"]).exit_code == 2
 
 

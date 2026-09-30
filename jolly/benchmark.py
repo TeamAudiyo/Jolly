@@ -48,6 +48,10 @@ def ensure_control_allowed(state: dict[str, Any], backend: str = "simulation") -
 def new_session(seed: int | None, trials: int, arm: str, backend: str, tolerance: float,
                 max_commands: int, max_seconds: float | None, measurement_config: str | None,
                 workspace: list[list[float]] | None = None) -> dict[str, Any]:
+    if not math.isfinite(tolerance) or not 0.001 <= tolerance <= 0.04:
+        raise ConfigurationError("Placement tolerance must be finite and within 0.001..0.04 meters.")
+    if max_seconds is not None and (not math.isfinite(max_seconds) or not 1 <= max_seconds <= 86400):
+        raise ConfigurationError("Time budget must be finite and within 1..86400 seconds.")
     driver = JollyDriver(seed)
     layouts = [driver.pick_place_instance(workspace) for _ in range(trials)]
     from jolly.robots.registry import configuration

@@ -511,8 +511,10 @@ def benchmark_status_command(json_output):
 @benchmark_group.command("history")
 @click.option("json_output", "--json", is_flag=True)
 def benchmark_history_command(json_output):
-    session = session_from(load_state() or {})
-    emit({"ok": True, "trials": session["results"]}, json_output=json_output)
+    saved = load_state() or {}
+    session = session_from(saved) if saved.get("active_benchmark") else None
+    emit({"ok": True, "trials": session["results"] if session else [],
+          "invalidations": saved.get("benchmark_invalidations", [])}, json_output=json_output)
 
 
 @main.group("arm")
