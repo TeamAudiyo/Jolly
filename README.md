@@ -18,22 +18,21 @@ No cloud service, MCP server, or API key is required.
 
 ## See Jolly 0.6.0 in action
 
-### Interactive SO-101 simulator
+### Simulator and terminal side by side
 
-![Jolly web viewer executing a explicit pick-and-place controls](docs/assets/jolly-web-measured-v060.gif)
+![Web simulator and terminal side by side](docs/assets/jolly-split-controls-v060-r2.gif)
 
-[Watch the full WebM recording](docs/assets/jolly-web-measured-v060.webm) ·
-[Open the full-resolution still](docs/assets/jolly-so101-measured-v060.png)
+[Watch the split-screen MP4](docs/assets/jolly-split-controls-v060-r2.mp4) ·
+[Open the full-resolution still](docs/assets/jolly-split-controls-v060-r2.png)
 
-The recording uses the official SO-101 CAD meshes in a real PyBullet world. It
-executes a explicit pick-and-place controls. The viewport is not a
-diagram or a hand-drawn robot substitute.
+The left half shows the web viewer. The right half shows terminal commands and
+unmodified Jolly output. The viewer refreshes after each terminal command.
 
 ### Operator-controlled randomized pick-and-place
 
-![Jolly 0.6.0 terminal demo showing explicit pick-and-place controls](docs/assets/jolly-terminal-measured-v060.gif)
+![Terminal commands and Jolly output](docs/assets/jolly-terminal-controls-v060-r2.gif)
 
-[Watch the MP4 recording](docs/assets/jolly-terminal-measured-v060.mp4)
+[Watch the MP4 recording](docs/assets/jolly-terminal-controls-v060-r2.mp4)
 
 The terminal recording shows approach, descent, grasp, lift, sideways motion,
 alignment, lowering, and release. Each command runs against PyBullet. A second
