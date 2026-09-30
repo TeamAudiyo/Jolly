@@ -31,7 +31,7 @@ def vector(value: Any, length: int, label: str) -> list[float]:
         raise ConfigurationError(f"{label} must contain finite numbers, not strings or booleans.")
     try:
         result = [float(v) for v in value]
-    except (ValueError, TypeError) as exc:
+    except (ValueError, TypeError, OverflowError) as exc:
         raise ConfigurationError(f"{label} must contain finite numbers.") from exc
     if not all(math.isfinite(v) for v in result):
         raise ConfigurationError(f"{label} must contain finite numbers.")
@@ -95,8 +95,8 @@ def measure_hardware(config_path: str, names: list[str], *, trial_id: str, not_b
             age = (datetime.now(timezone.utc) - stamp).total_seconds()
             if not_before and stamp < datetime.fromisoformat(not_before):
                 raise ConfigurationError("Measurement predates the active trial.")
-            max_age = float(cfg.get("max_age_seconds", 2))
-        except (KeyError, ValueError, TypeError) as exc:
+            max_age = vector([cfg.get("max_age_seconds", 2)], 1, "max_age_seconds")[0]
+        except (KeyError, ValueError, TypeError, OverflowError) as exc:
             raise ConfigurationError("Measurement timestamp must include UTC offset.") from exc
         if not math.isfinite(max_age) or not 0 < max_age <= 30 or not 0 <= age <= max_age:
             raise ConfigurationError(f"Missing, future, or stale measurement for {name}.")
@@ -141,7 +141,7 @@ def _camera_measurements(cfg: dict[str, Any], names: list[str], trial_id: str, n
         result = {}
         for name in names:
             marker = markers[name]
-            size = float(marker["size_meters"])
+            size = vector([marker["size_meters"]], 1, "size_meters")[0]
             if not math.isfinite(size) or size <= 0:
                 raise ValueError("Invalid marker size")
             half = size / 2
@@ -153,7 +153,7 @@ def _camera_measurements(cfg: dict[str, Any], names: list[str], trial_id: str, n
                 raise ValueError("Marker pose could not be measured")
             projected, _ = cv2.projectPoints(points, rvec, tvec, matrix, distortion)
             error = float(np.sqrt(np.mean((projected.reshape(4, 2) - detected.reshape(4, 2)) ** 2)))
-            tolerance = float(cfg.get("max_reprojection_error_pixels", 2))
+            tolerance = vector([cfg.get("max_reprojection_error_pixels", 2)], 1, "max_reprojection_error_pixels")[0]
             if not math.isfinite(tolerance) or tolerance <= 0 or not math.isfinite(error) or error > tolerance:
                 raise ValueError("Marker reprojection error exceeds calibration tolerance")
             rotation, _ = cv2.Rodrigues(rvec)
@@ -172,5 +172,5 @@ def _camera_measurements(cfg: dict[str, Any], names: list[str], trial_id: str, n
             evidence = measure_hardware(cfg["evidence_config"], names, trial_id=trial_id, not_before=not_before)
             result["evidence"] = evidence["evidence"]
         return result
-    except (KeyError, ValueError, TypeError, AttributeError, cv2.error) as exc:
+    except (KeyError, ValueError, TypeError, OverflowError, AttributeError, cv2.error) as exc:
         raise ConfigurationError(f"Camera measurement unavailable: {exc}") from exc

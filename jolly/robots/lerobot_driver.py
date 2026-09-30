@@ -37,7 +37,7 @@ class LeRobotDriver:
                 limits = vector(item["limits_degrees"], 2, name)
                 if limits[0] >= limits[1]:
                     raise ValueError("limits must increase")
-            except (KeyError, ValueError, TypeError) as exc:
+            except (KeyError, ValueError, TypeError, OverflowError) as exc:
                 raise ConfigurationError(f"Invalid joint mapping for {name}: {exc}") from exc
         try:
             from lerobot.robots.utils import make_robot_from_config

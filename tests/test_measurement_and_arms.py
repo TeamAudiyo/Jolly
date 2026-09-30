@@ -210,3 +210,47 @@ def test_planar_sensor_contract_reports_limited_scope(tmp_path, monkeypatch):
     assert trial['center_distance_3d_meters'] is None
     assert not trial['success']
     assert 'no_grasp_evidence' in trial['failure_reasons']
+
+
+@pytest.mark.parametrize('field', ['coordinate', 'max_age_seconds'])
+def test_sensor_integer_overflow_emits_json_error_and_persists_abort(tmp_path, monkeypatch, field):
+    from click.testing import CliRunner
+    from jolly.cli import main
+    from jolly.core.store import load_state
+    monkeypatch.setenv('JOLLY_STATE_DIR', str(tmp_path / 'state'))
+    sensor = tmp_path / 'live.json'
+    cfg = tmp_path / 'sensor.json'
+    provider = {'provider': 'tracker', 'document': str(sensor)}
+    if field == 'max_age_seconds':
+        provider[field] = 10**400
+    cfg.write_text(json.dumps(provider))
+    arm = tmp_path / 'arm.json'
+    arm.write_text(json.dumps({'arm': 'so101', 'workspace_meters': [[.27, .33], [-.17, .17], [0, .36]]}))
+    runner = CliRunner()
+    start = runner.invoke(main, ['benchmark', 'start', '--backend', 'hardware', '--seed', '1',
+                                 '--arm-config', str(arm), '--measurement-config', str(cfg), '--json'])
+    assert start.exit_code == 0, start.output
+    instance = load_state()['challenge_instance']
+    sensor.write_text(json.dumps({'trial_id': '1:1', 'frame': 'robot-base', 'units': 'meters', 'objects': {
+        name: {'dimensions': 2, 'position_meters': point, 'measured_at': datetime.now(timezone.utc).isoformat()}
+        for name, point in [('part', [10**400 if field == 'coordinate' else .3, .1]),
+                            (instance['place_slot'], instance['target'][:2])]}}))
+    score = runner.invoke(main, ['benchmark', 'score', '--json'])
+    assert score.exit_code == 2, score.output
+    error = json.loads(score.output)
+    assert error['error']['type'] == 'ConfigurationError'
+    assert 'finite' in error['error']['message']
+    assert 'placement_error_meters' not in score.output
+    session = load_state()['benchmark_session']
+    assert session['aborted']
+    assert session['results'] == []
+    with pytest.raises(ConfigurationError):
+        measure_hardware(str(cfg), ['part', instance['place_slot']], trial_id='1:1')
+
+
+def test_camera_calibration_overflow_fails_before_capture():
+    pytest.importorskip('cv2')
+    from jolly.measurement import _camera_measurements
+    # Invalid calibration boundary only: no camera capture or placement outcome.
+    with pytest.raises(ConfigurationError, match='Camera measurement unavailable'):
+        _camera_measurements({'camera_matrix': [[10**400, 0, 0], [0, 1, 0], [0, 0, 1]]}, ['part'], '1:1')

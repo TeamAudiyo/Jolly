@@ -49,7 +49,7 @@ def configured_models() -> dict[str, RobotModel]:
                 home_degrees=tuple(vector(spec["home_degrees"], len(joints), "home_degrees")),
                 description="User-configured kinematic model", source=spec["source"], license=spec["license"],
             )
-    except (KeyError, ValueError, TypeError) as exc:
+    except (KeyError, ValueError, TypeError, OverflowError) as exc:
         raise ConfigurationError(f"Invalid kinematic model configuration: {exc}") from exc
     return result
 
