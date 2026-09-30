@@ -75,3 +75,26 @@ def test_web_preserves_and_records_operator_benchmark(tmp_path, monkeypatch) -> 
     measured = json.loads(score.output)
     assert measured["trial"]["control_count"] == 1
     assert measured["trial"]["outcome"] == "FAIL"
+
+
+def test_hardware_trial_cannot_use_simulator_api(tmp_path, monkeypatch):
+    import json
+    from click.testing import CliRunner
+    from jolly.cli import main
+    from jolly.core.store import load_state
+    monkeypatch.setenv('JOLLY_STATE_DIR', str(tmp_path))
+    sensor = tmp_path / 'provider.json'
+    sensor.write_text(json.dumps({'provider': 'tracker', 'document': str(tmp_path / 'missing-live-sensor.json')}))
+    arm = tmp_path / 'arm.json'
+    arm.write_text(json.dumps({'arm': 'so101', 'workspace_meters': [[.27, .33], [-.17, .17], [0, .36]]}))
+    started = CliRunner().invoke(main, ['benchmark', 'start', '--backend', 'hardware', '--arm-config', str(arm),
+                                       '--measurement-config', str(sensor), '--json'])
+    assert started.exit_code == 0
+    before = load_state()
+    client = TestClient(app)
+    assert client.get('/api/state').status_code == 400
+    assert client.get('/api/render.png').status_code == 400
+    assert client.post('/api/reach', json={'x': .3, 'y': 0, 'z': .3}).status_code == 400
+    assert load_state() == before
+    assert client.post('/api/reset', json={'model': 'so101', 'scene': 'empty'}).status_code == 200
+    assert load_state()['benchmark_invalidations']

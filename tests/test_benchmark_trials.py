@@ -115,3 +115,23 @@ def test_rejected_collision_is_not_forgotten(tmp_path, monkeypatch):
     assert any(c["measured"]["collision"] for c in state["controls"])
     scored = call(runner, "benchmark", "score")
     assert "collision" in scored["trial"]["failure_reasons"]
+
+
+def test_real_elapsed_time_budget(tmp_path, monkeypatch):
+    import time
+    monkeypatch.setenv('JOLLY_STATE_DIR', str(tmp_path))
+    runner = CliRunner()
+    call(runner, 'benchmark', 'start', '--seed', 1, '--max-trial-seconds', 1, '--trials', 1)
+    time.sleep(1.1)
+    scored = call(runner, 'benchmark', 'score')
+    assert scored['trial']['duration_seconds'] > 1
+    assert 'time_budget_exceeded' in scored['trial']['failure_reasons']
+
+
+def test_nonfinite_budget_rejected(tmp_path, monkeypatch):
+    monkeypatch.setenv('JOLLY_STATE_DIR', str(tmp_path))
+    runner = CliRunner()
+    for flag in ('--max-trial-seconds', '--placement-tolerance'):
+        result = runner.invoke(main, ['benchmark', 'start', flag, 'nan', '--json'])
+        assert result.exit_code == 2
+        assert 'finite' in result.output

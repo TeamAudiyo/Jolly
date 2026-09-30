@@ -167,3 +167,46 @@ def test_hardware_score_sensor_error_aborts_without_numeric_result(tmp_path, mon
                                    '--confirm-hardware', '--x', '.3', '--y', '0', '--z', '.3', '--json'])
     assert control.exit_code == 2
     assert 'aborted' in control.output
+
+
+def test_hardware_config_paths_resolve_before_persistence(tmp_path, monkeypatch):
+    from click.testing import CliRunner
+    from jolly.cli import main
+    monkeypatch.setenv('JOLLY_STATE_DIR', str(tmp_path / 'state'))
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'sensor.json').write_text(json.dumps({'provider': 'tracker', 'document': str(tmp_path / 'live.json')}))
+    (tmp_path / 'arm.json').write_text(json.dumps({'arm': 'so101', 'workspace_meters': [[.27, .33], [-.17, .17], [0, .36]]}))
+    result = CliRunner().invoke(main, ['benchmark', 'start', '--backend', 'hardware', '--arm-config', 'arm.json',
+                                      '--measurement-config', 'sensor.json', '--json'])
+    assert result.exit_code == 0, result.output
+    session = json.loads(result.output)['state']['benchmark_session']
+    assert session['arm_config'] == str(tmp_path / 'arm.json')
+    assert session['measurement_config'] == str(tmp_path / 'sensor.json')
+
+
+def test_planar_sensor_contract_reports_limited_scope(tmp_path, monkeypatch):
+    from click.testing import CliRunner
+    from jolly.cli import main
+    from jolly.core.store import load_state
+    # Sensor parser contract fixture only. This is not physical performance evidence.
+    monkeypatch.setenv('JOLLY_STATE_DIR', str(tmp_path / 'state'))
+    sensor = tmp_path / 'live.json'
+    cfg = tmp_path / 'sensor.json'
+    cfg.write_text(json.dumps({'provider': 'tracker', 'document': str(sensor)}))
+    arm = tmp_path / 'arm.json'
+    arm.write_text(json.dumps({'arm': 'so101', 'workspace_meters': [[.27, .33], [-.17, .17], [0, .36]]}))
+    runner = CliRunner()
+    result = runner.invoke(main, ['benchmark', 'start', '--backend', 'hardware', '--arm-config', str(arm),
+                                  '--measurement-config', str(cfg), '--seed', '1', '--json'])
+    assert result.exit_code == 0
+    instance = load_state()['challenge_instance']
+    sensor.write_text(json.dumps({'trial_id': '1:1', 'frame': 'robot-base', 'units': 'meters', 'objects': {
+        name: {'dimensions': 2, 'position_meters': point[:2], 'measured_at': datetime.now(timezone.utc).isoformat()}
+        for name, point in [('part', instance['object_positions']['part']), (instance['place_slot'], instance['target'])]}}))
+    scored = runner.invoke(main, ['benchmark', 'score', '--json'])
+    assert scored.exit_code == 0, scored.output
+    trial = json.loads(scored.output)['trial']
+    assert trial['verification_scope'] == 'planar-only'
+    assert trial['center_distance_3d_meters'] is None
+    assert not trial['success']
+    assert 'no_grasp_evidence' in trial['failure_reasons']
